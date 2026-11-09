@@ -5,13 +5,13 @@ import { mount } from '../src/ui/app.js';
 import { resultText } from '../src/ui/format.js';
 import { sv, t } from '../src/i18n/sv.js';
 
-function setup() {
+function setup(options = {}) {
   const dom = new JSDOM('<!doctype html><html lang="sv"><body><div id="app"></div></body></html>');
   globalThis.FormData = dom.window.FormData;
   const copied = [];
   const clipboard = { writeText: async (x) => { copied.push(x); } };
   const root = dom.window.document.getElementById('app');
-  const app = mount(root, { clipboard });
+  const app = mount(root, { clipboard, minAnswerInterval: 0, ...options });
   const $ = (sel) => root.querySelector(sel);
   const $$ = (sel) => [...root.querySelectorAll(sel)];
   const submit = (form) => form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
@@ -236,4 +236,50 @@ test('alla gränssnittstexter finns i språkfilen (NFR-11)', async () => {
   for (const c of ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink']) {
     assert.ok(`color.${c}` in sv);
   }
+});
+
+test('bekräftelse visas efter varje val (KR-7, TC-041)', () => {
+  const { root, begin, addNote, action } = setup();
+  begin();
+  ['A', 'B', 'C'].forEach((x) => addNote(x));
+  action('start');
+  action('answer');
+  assert.match(root.querySelector('.notice').textContent, /Valet är registrerat/);
+});
+
+test('dubbelklick och tangentspam hoppar inte över par (NFR-9, TC-106, TC-108)', () => {
+  let t0 = 1000;
+  const { $, root, key, begin, addNote, action } = setup({ minAnswerInterval: 350, now: () => t0 });
+  begin();
+  ['A', 'B', 'C', 'D'].forEach((x) => addNote(x));
+  action('start');
+  action('answer');
+  action('answer'); // direkt efteråt = dubbelklick, ignoreras
+  key('ArrowLeft');
+  assert.match($('.progress').textContent, /1 av 6/);
+  t0 += 400;
+  action('answer');
+  assert.match($('.progress').textContent, /2 av 6/);
+  void root;
+});
+
+test('fast seed från mount ger samma par i samma ordning (TF-8)', () => {
+  const order = (seed) => {
+    const { root, begin, addNote, action } = setup({ seed });
+    begin();
+    ['A', 'B', 'C', 'D'].forEach((x) => addNote(x));
+    action('start');
+    return [...root.querySelectorAll('.choice .note-title')].map((e) => e.textContent);
+  };
+  assert.deepEqual(order(7), order(7));
+});
+
+test('för lång titel ger felmeddelande i stället för att tyst klippas (TC-005)', () => {
+  const { $, $$, begin, addNote } = setup();
+  begin();
+  addNote('x'.repeat(100));
+  assert.equal($$('.note').length, 1);
+  addNote('x'.repeat(101));
+  assert.match($('.error').textContent, /för lång/);
+  assert.equal($$('.note').length, 1);
 });

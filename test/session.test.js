@@ -427,3 +427,28 @@ test('LIMITS följer besluten', () => {
   assert.equal(LIMITS.MIN_NOTES, 2);
   assert.equal(LIMITS.PARTICIPANT_NAME_MAX, 15);
 });
+
+// ---- Teckenräkning (TF-1) ----
+
+test('längd räknas i tecken (kodpunkter): en emoji är ett tecken', () => {
+  const s = mk();
+  assert.ok(s.addNote(s.ownerId, { title: '😀'.repeat(100) }));
+  assert.equal(code(() => s.addNote(s.ownerId, { title: '😀'.repeat(101) })), 'TITLE_TOO_LONG');
+  const g = mk({ individual: false });
+  assert.ok(g.addParticipant('😀'.repeat(15)));
+  assert.equal(code(() => g.addParticipant('😀'.repeat(16))), 'NAME_TOO_LONG');
+});
+
+test('namn trimmas och åäö är skiftlägesokänsliga (TF-2)', () => {
+  const s = mk({ individual: false });
+  assert.ok(s.addParticipant('Åsa'));
+  assert.equal(code(() => s.addParticipant('åsa')), 'NAME_TAKEN');
+  assert.equal(code(() => s.addParticipant('ÅSA ')), 'NAME_TAKEN');
+});
+
+test('fast seed ger samma jämförelseordning (TF-8)', () => {
+  const a = withNotes(6, { seed: 99 }), b = withNotes(6, { seed: 99 }), c = withNotes(6, { seed: 100 });
+  a.start(a.ownerId); b.start(b.ownerId); c.start(c.ownerId);
+  assert.deepEqual(a.queue, b.queue);
+  assert.notDeepEqual(a.queue, c.queue);
+});

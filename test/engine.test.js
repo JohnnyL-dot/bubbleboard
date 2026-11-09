@@ -173,3 +173,39 @@ test('en ensam röst avgör (individuellt läge)', () => {
   assert.deepEqual(tally(['equal']).outcome, 'equal');
   assert.deepEqual(tally(['right']).outcome, 'right');
 });
+
+// ---- Granskningspunkter i testspecifikationen (TC-056, TC-057, TC-049) ----
+
+test('determinism: samma röstsekvens ger identisk rangordning (TC-056)', () => {
+  const ids = ['a', 'b', 'c', 'd'];
+  const comps = [
+    { left: 'a', right: 'b', outcome: 'left' },
+    { left: 'c', right: 'd', outcome: 'equal' },
+    { left: 'a', right: 'c', outcome: 'right' },
+    { left: 'b', right: 'd', outcome: 'left' },
+    { left: 'a', right: 'd', outcome: 'left' },
+    { left: 'b', right: 'c', outcome: 'right' },
+  ];
+  assert.deepEqual(computeRanking(ids, comps), computeRanking(ids, comps));
+});
+
+test('ordningsoberoende: samma utfall per par i annan ordning ger samma resultat (TC-057)', () => {
+  const ids = ['a', 'b', 'c', 'd'];
+  const comps = [
+    { left: 'a', right: 'b', outcome: 'left' },
+    { left: 'c', right: 'd', outcome: 'equal' },
+    { left: 'a', right: 'c', outcome: 'right' },
+    { left: 'b', right: 'd', outcome: 'left' },
+    { left: 'a', right: 'd', outcome: 'left' },
+    { left: 'b', right: 'c', outcome: 'right' },
+  ];
+  const reversed = [...comps].reverse();
+  // Samma par presenterade med vänster/höger omkastade ger samma poäng.
+  const flipped = comps.map((c) => ({
+    left: c.right, right: c.left,
+    outcome: c.outcome === 'left' ? 'right' : c.outcome === 'right' ? 'left' : 'equal',
+  }));
+  const base = computeRanking(ids, comps);
+  assert.deepEqual(computeRanking(ids, reversed), base);
+  assert.deepEqual(computeRanking(ids, flipped), base);
+});

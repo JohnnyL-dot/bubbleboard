@@ -11,7 +11,13 @@ const esc = (value) =>
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
 
-export function mount(root, { dict = sv, clipboard = globalThis.navigator?.clipboard } = {}) {
+export function mount(root, {
+  dict = sv,
+  clipboard = globalThis.navigator?.clipboard,
+  seed,                      // fast seed för reproducerbar ordning i testbygge (TF-8, OQ-21)
+  minAnswerInterval = 350,   // ms, skyddar mot dubbelklick och tangentspam (NFR-9)
+  now = () => Date.now(),
+} = {}) {
   const t = (key, params) => translate(key, params, dict);
   const doc = root.ownerDocument;
 
@@ -25,6 +31,7 @@ export function mount(root, { dict = sv, clipboard = globalThis.navigator?.clipb
     notice: '',
     confirm: null,       // { message, onYes }
     copyFallback: '',
+    lastAnswerAt: -Infinity,
   };
 
   const owner = () => state.session.ownerId;
@@ -68,9 +75,9 @@ export function mount(root, { dict = sv, clipboard = globalThis.navigator?.clipb
         ${state.error ? `<p class="error" role="alert">${esc(state.error)}</p>` : ''}
         <form data-form="start">
           <label>${esc(t('start.boardName'))}
-            <input name="boardName" maxlength="${LIMITS.BOARD_NAME_MAX}" value="${esc(state.startDraft.boardName)}" autocomplete="off"></label>
+            <input name="boardName" value="${esc(state.startDraft.boardName)}" autocomplete="off"></label>
           <label>${esc(t('start.alias'))}
-            <input name="alias" maxlength="${LIMITS.PARTICIPANT_NAME_MAX}" value="${esc(state.startDraft.alias)}" autocomplete="nickname"></label>
+            <input name="alias" value="${esc(state.startDraft.alias)}" autocomplete="nickname"></label>
           <div class="row">
             <button type="submit" class="primary">${esc(t('start.individual'))}</button>
             <button type="button" disabled aria-describedby="group-info">${esc(t('start.group'))}</button>
@@ -103,11 +110,11 @@ export function mount(root, { dict = sv, clipboard = globalThis.navigator?.clipb
     return `
       <form data-form="note" class="note-form">
         <label>${esc(t('note.title'))}
-          <input name="title" maxlength="${LIMITS.TITLE_MAX}" value="${esc(d.title)}" autocomplete="off"></label>
+          <input name="title" value="${esc(d.title)}" autocomplete="off"></label>
         <label>${esc(t('note.description'))}
-          <textarea name="description" maxlength="${LIMITS.DESCRIPTION_MAX}" rows="2">${esc(d.description)}</textarea></label>
+          <textarea name="description" rows="2">${esc(d.description)}</textarea></label>
         <label>${esc(t('note.category'))}
-          <input name="category" maxlength="${LIMITS.CATEGORY_MAX}" value="${esc(d.category)}" autocomplete="off"></label>
+          <input name="category" value="${esc(d.category)}" autocomplete="off"></label>
         <label>${esc(t('note.color'))}
           <select name="color">
             <option value="">${esc(t('note.noColor'))}</option>
@@ -262,6 +269,7 @@ export function mount(root, { dict = sv, clipboard = globalThis.navigator?.clipb
       <main>
         ${state.error ? `<p class="error" role="alert">${esc(state.error)}</p>` : ''}
         ${content}
+        ${state.notice && s.mode === MODE.RUNNING ? `<p class="notice" role="status">${esc(state.notice)}</p>` : ''}
       </main>
       ${renderConfirm()}`;
   }
@@ -290,7 +298,7 @@ export function mount(root, { dict = sv, clipboard = globalThis.navigator?.clipb
       };
     },
     start: () => { state.session.start(owner()); state.view = 'sort'; },
-    answer: (el) => state.session.answer(el.dataset.choice),
+    answer: (el) => answer(el.dataset.choice),
     undo: () => state.session.undo(),
     pause: () => state.session.pause(owner()),
     resume: () => state.session.resume(owner()),
@@ -319,6 +327,15 @@ export function mount(root, { dict = sv, clipboard = globalThis.navigator?.clipb
     },
     'confirm-no': () => { state.confirm = null; },
   };
+
+  /** Registrerar ett svar, men ignorerar upprepade tryck inom intervallet (NFR-9). */
+  function answer(choice) {
+    const at = now();
+    if (at - state.lastAnswerAt < minAnswerInterval) return;
+    state.lastAnswerAt = at;
+    state.session.answer(choice);
+    state.notice = t('sort.registered');
+  }
 
   function emptyDraft() {
     return { title: '', description: '', category: '', color: '' };
@@ -354,7 +371,7 @@ export function mount(root, { dict = sv, clipboard = globalThis.navigator?.clipb
       state.startDraft = { boardName: data.boardName ?? '', alias: data.alias ?? '' };
       run(() => {
         state.session = new Session({
-          boardName: data.boardName, ownerName: data.alias, individual: true,
+          boardName: data.boardName, ownerName: data.alias, individual: true, seed,
         });
         state.view = 'free';
       });
@@ -386,7 +403,8 @@ export function mount(root, { dict = sv, clipboard = globalThis.navigator?.clipb
     const choice = map[event.key];
     if (!choice) return;
     event.preventDefault();
-    run(() => s.answer(choice));
+    if (event.repeat) return;
+    run(() => answer(choice));
   });
 
   render();

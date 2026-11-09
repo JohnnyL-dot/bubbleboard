@@ -46,6 +46,11 @@ function cleanText(value) {
   return typeof value === 'string' ? value : '';
 }
 
+/** Längd i tecken (Unicode-kodpunkter), så att en emoji räknas som ett tecken (TF-1). */
+export function charLength(text) {
+  return [...text].length;
+}
+
 export class Session {
   /**
    * @param {{boardName:string, ownerName:string, seed?:number, individual?:boolean}} opts
@@ -53,7 +58,7 @@ export class Session {
   constructor({ boardName, ownerName, seed, individual = true }) {
     const board = cleanText(boardName).trim();
     if (!board) fail('BOARD_NAME_EMPTY');
-    if (board.length > LIMITS.BOARD_NAME_MAX) fail('BOARD_NAME_TOO_LONG');
+    if (charLength(board) > LIMITS.BOARD_NAME_MAX) fail('BOARD_NAME_TOO_LONG');
 
     this.boardName = board;
     this.individual = individual;
@@ -77,7 +82,7 @@ export class Session {
   _addParticipant(rawName) {
     const name = cleanText(rawName).trim();
     if (!name) fail('NAME_EMPTY');
-    if (name.length > LIMITS.PARTICIPANT_NAME_MAX) fail('NAME_TOO_LONG');
+    if (charLength(name) > LIMITS.PARTICIPANT_NAME_MAX) fail('NAME_TOO_LONG');
     for (const p of this.participants.values()) {
       if (p.name.toLowerCase() === name.toLowerCase()) fail('NAME_TAKEN');
     }
@@ -103,11 +108,11 @@ export class Session {
   _validateNote({ title, description, category, color }) {
     const t = cleanText(title).trim();
     if (!t) fail('TITLE_EMPTY');
-    if (t.length > LIMITS.TITLE_MAX) fail('TITLE_TOO_LONG');
+    if (charLength(t) > LIMITS.TITLE_MAX) fail('TITLE_TOO_LONG');
     const d = cleanText(description);
-    if (d.length > LIMITS.DESCRIPTION_MAX) fail('DESCRIPTION_TOO_LONG');
+    if (charLength(d) > LIMITS.DESCRIPTION_MAX) fail('DESCRIPTION_TOO_LONG');
     const c = cleanText(category).trim();
-    if (c.length > LIMITS.CATEGORY_MAX) fail('CATEGORY_TOO_LONG');
+    if (charLength(c) > LIMITS.CATEGORY_MAX) fail('CATEGORY_TOO_LONG');
     if (color != null && color !== '' && !COLORS.includes(color)) fail('COLOR_INVALID');
     return { title: t, description: d.trim(), category: c, color: color || null };
   }

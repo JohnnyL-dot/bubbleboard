@@ -58,6 +58,7 @@ export const sv = {
   'sort.finishEarly': 'Avsluta i förtid',
   'sort.showResult': 'Visa resultat',
   'sort.allDone': 'Alla jämförelser är klara.',
+  'sort.registered': 'Valet är registrerat.',
   'sort.keys': 'Tangenter: vänsterpil, högerpil och likamedtecken.',
 
   'confirm.yes': 'Ja',
