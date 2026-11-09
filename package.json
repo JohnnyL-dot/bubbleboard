@@ -1,0 +1,13 @@
+{
+  "name": "bubbleboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Collaborative Prioritization Board (MVP)",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^31.0.0"
+  }
+}
