@@ -1,0 +1,132 @@
+{
+  "at": "2026-11-10T18:01:00.824Z",
+  "results": [
+    {
+      "id": "M1′",
+      "status": "OK",
+      "text": "synk (skrivning, 30 lappar) p50 11.9 ms, p95 15.6 ms, max 25.8 ms; läsning p95 12 ms; 120/120 lyckade. Lokalt svar på ett val (≤100 ms) är klientlogik utan nätanrop, ej mätt här.",
+      "data": {
+        "write": {
+          "n": 120,
+          "p50": 11.864834999999971,
+          "p95": 15.589144000000005,
+          "max": 25.794610000000006
+        },
+        "read": {
+          "n": 120,
+          "p50": 8.435590000000047,
+          "p95": 12.048861999999986,
+          "max": 28.985283000000095
+        }
+      }
+    },
+    {
+      "id": "M2′",
+      "status": "OK (delvis beräknad)",
+      "text": "Klar syns vid nästa läsning direkt efter skrivning (läs-efter-skriv-konsistens ja). Övre gräns till deltagare = pollintervall 10 s + svarstid ≈ 10 s (beräknad, inte uppmätt i ett fullt pollförlopp).",
+      "data": {}
+    },
+    {
+      "id": "M3′/M13",
+      "status": "OK",
+      "text": "rejoin ger eget läge och rev (true); flik med lägre rev avvisas 409 med serverns rev (409, rev 5); läget ersätts, inte läggs till (true); högre rev accepteras; saknad hemlighet (ny enhet) ger generiskt 404.",
+      "data": {}
+    },
+    {
+      "id": "M4",
+      "status": "OK",
+      "text": "10 sessioner × 20 deltagare: alla såg bara sina egna 20/20/20/20/20/20/20/20/20/20 namn, alla Klar; anslutning p95 92 ms; 31:a deltagaren avvisad (409 full); två samtidiga på sista platsen gav 200,409 och 30 deltagare.",
+      "data": {}
+    },
+    {
+      "id": "M6",
+      "status": "OK",
+      "text": "Alla svar till B (sync, rejoin, lookup före och efter avslut): Annas läge saknas (true); deltagarobjekt har bara name/state/owner (true); inga hemligheter (ägarnyckel, länktoken, deltagarhemlighet) i svar; efter avslut finns bara summeringen. B:s eget läge returneras bara till B vid rejoin (true). Gäller även ägaren (samma svar). Bara nätverkssvar kontrollerades, inte webbläsarens minne eller DOM (klienten är inte byggd).",
+      "data": {}
+    },
+    {
+      "id": "M7",
+      "status": "OK",
+      "text": "10 felaktiga koder ger 404, den 11:e inom en minut ger 429 (429), även rätt kod är spärrad från samma IP (429), annan IP fungerar (200), efter fönstret fungerar den igen (200). Samma spärr gäller join och hemlighetskontroll. Verklig IP bakom Cloudflare (cf-connecting-ip) kan inte provas lokalt.",
+      "data": {}
+    },
+    {
+      "id": "M9",
+      "status": "OK (med tidsstyrning)",
+      "text": "23 h efter skapande finns sessionen (skrivning förlänger), 24 h efter senaste skrivning är den oåtkomlig trots polling i mellantiden (polling räknas inte): 404; cron-rensning tog bort 1 utgången session (via /cdn-cgi/handler/scheduled); avslutad session nåbar efter 20 h (200), borta efter 26 h (404). Tiden är styrd med testrubrik, inte väntad. Taket 72 h (Förslag OQ-67) är av som standard och ej provat.",
+      "data": {}
+    },
+    {
+      "id": "M11",
+      "status": "OK",
+      "text": "20 deltagare × 435 jämförelser: poäng per lapp stämmer med oberoende räkning (true), summan 8700 = 8700, ordning sjunkande (true), ej preliminär.",
+      "data": {}
+    },
+    {
+      "id": "M10′",
+      "status": "OK",
+      "text": "20 klienter × 435 svar (virtuell tid, synk var 10 s, polling i samma takt): 12160 anrop utan fel (0 fel); skrivning p50 128.1 ms, p95 197.7 ms, max 255.6 ms; läsning p95 131.1 ms; tidsåtgång 68.1 s verklig tid. Verklig tid över 10 min: se M10b.",
+      "data": {
+        "w": {
+          "n": 6080,
+          "p50": 128.11936200000036,
+          "p95": 197.65349899999273,
+          "max": 255.582067000003
+        },
+        "r": {
+          "n": 6080,
+          "p50": 75.364203000001,
+          "p95": 131.10161099999823,
+          "max": 246.75084699999934
+        }
+      }
+    },
+    {
+      "id": "M5/M15",
+      "status": "DELVIS",
+      "text": "Ett fullt pass (20 × 30 lappar, 435 jämförelser, 7 s per jämförelse, synk var 10 s): 6080 skrivande synkar + 6080 extra läsningar i mätningen (ADR-modellen har ett anrop per synk, alltså ca 6102 anrop per pass; Worker-gratis 100 000 anrop/dygn ⇒ ca 16 pass). D1 under hela mätningen: 12182 rader skrivna och 291887 lästa, inklusive de extra läsningarna (gratis 100 000 skrivna / 5 000 000 lästa per dygn ⇒ ca 8 pass på skrivgränsen, högst 17 på läsgränsen, som är för pessimistisk eftersom läsningarna är dubblerade). Största anrop 4006 byte. Raderna är lokalt D1:s egen räkning och ska jämföras med Cloudflares användningsvy (kräver konto, ej gjort).",
+      "data": {
+        "rowsW": 12160,
+        "rowsR": 291840,
+        "reqPerPass": 6102
+      }
+    },
+    {
+      "id": "M5 (CPU)",
+      "status": "OK (Node, ej workerd)",
+      "text": "Summering av 20 × 435 jämförelser i Node: p50 1.1 ms, p95 4.4 ms, max 4.9 ms (gratisgräns 10 ms CPU per anrop). workerd räknar inte CPU-tid lokalt och dess timers står stilla utan I/O, så siffran gäller Node och måste kompletteras med Cloudflares egen CPU-mätning.",
+      "data": {
+        "C": {
+          "n": 50,
+          "p50": 1.105427000002237,
+          "p95": 4.352026000007754,
+          "max": 4.936203999997815
+        }
+      }
+    },
+    {
+      "id": "M12",
+      "status": "OK",
+      "text": "10 synkar samtidigt med avslut: svarskoder 200, inga 5xx; upprepat avslut ger samma resultat; individuella lägen är rensade efter avslut (true). Skrivningar som kom efter avslutet avvisas (409/404). Lägen som skrevs i det korta fönstret mellan läsning och rensning kan saknas i resultatet, vilket stämmer med att resultatet märks preliminärt. Avbrott mitt i avslutet (status 'finishing' kvar) är bara provat i minnesläge, inte mot D1.",
+      "data": {}
+    },
+    {
+      "id": "M16",
+      "status": "OK (delvis)",
+      "text": "Stängning raderar sessionen och alla deltagarrader direkt (sessioner 6→5, deltagare 9→7); efteråt ger sync, rejoin och uppslag med kod eller länk samma generiska 404 (true); deltagare kan inte stänga (403, även med ägarnyckel). \"Vill du spara?\" och sparad fil är klientfunktioner som inte är byggda i gruppsession; att ingen hemlighet finns i fil eller kopierad text kunde därför bara kontrolleras för serverns svar (M6), inte för fil. D1 Time Travel sparar raderad data 7 dagar (accepterad begränsning, ADR-003 avsnitt 6).",
+      "data": {}
+    },
+    {
+      "id": "M10b",
+      "status": "OK (kortare än 10 min)",
+      "text": "20 klienter i verklig tid 120 s, synk var 10 s med 4 s skrivspärr: 240 anrop, 0 fel, skrivning p95 289.1 ms. Planen var 10 min; kortad tid anges här.",
+      "data": {}
+    },
+    {
+      "id": "M15",
+      "status": "OK",
+      "text": "Skapande: 5 av 6 från samma IP tillåtna, nr 6 avvisas (create_limit); för stor kropp ger 413; skrivning oftare än var 4:e sekund ger too_fast; tak för aktiva sessioner nåddes vid 50 (capacity, start 11). Värdena (5 per timme och IP, 50 sessioner) är Förslag (OQ-64) och inställda i prototypen. Cloudflares egen kvotvarning och det som händer när gratiskvoten tar slut (Workers svarar 1015/felsvar, D1 avvisar) kan inte provas utan konto.",
+      "data": {}
+    }
+  ]
+}

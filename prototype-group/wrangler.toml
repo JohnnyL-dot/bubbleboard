@@ -1,0 +1,21 @@
+# Mätprototyp, körs lokalt: npm run dev (wrangler dev --local). Inget konto behövs.
+# Ingen account_id, inget database_id och ingen token finns här. När Johnny skapar en
+# D1-databas (jurisdiktion eu) fyller han i database_id vid deploy.
+name = "bubble-prototype-group"
+main = "src/worker.js"
+compatibility_date = "2026-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bubble-proto"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+# Origin som tillåts mot /api/*. Lokalt är det wrangler dev. Produktion: https://bubblesort.se
+ALLOWED_ORIGINS = "http://localhost:8787,http://127.0.0.1:8787"
+# TESTMILJÖ (ADR-003 avsnitt 12): får aldrig finnas i produktion.
+TEST_MODE = "1"

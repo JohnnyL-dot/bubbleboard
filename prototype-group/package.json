@@ -1,0 +1,8 @@
+{
+  "name": "bubble-prototype-group",
+  "private": true,
+  "type": "module",
+  "description": "Mätprototyp för gruppsession (OQ-51, ADR-003). Körs lokalt med wrangler dev. Publiceras inte på Pages.",
+  "scripts": { "dev": "wrangler dev --local --persist-to .wrangler-state", "test": "node --test test/*.test.js" },
+  "devDependencies": { "wrangler": "^4" }
+}
