@@ -1,7 +1,7 @@
 # Mätprototyp för gruppsession (OQ-51, ADR-003)
 
-**Status:** mätprototyp. Pushas inte till GitHub Pages och är inte den riktiga gruppsessionen. Allt märkt Förslag
-(OQ-61–OQ-70) är inställningar för mätningen, inte krav.
+**Status:** mätprototyp. Pushas inte till GitHub Pages och är inte den riktiga gruppsessionen. Hårda gränser: 20 deltagare och 25 lappar (OQ-71). Allt märkt Förslag
+(OQ-61–OQ-63, OQ-65–OQ-70) är inte byggt eller beslutat.
 
 Cloudflare Worker + D1 (EU), vanliga HTTPS-anrop med polling. Bara POST med JSON under `/api/*`. Inget loggas.
 
@@ -21,4 +21,4 @@ npm test                             # API-tester mot minneslagring
 
 ## Parametrar (miljövariabler, standardvärden)
 `INACTIVITY_MS` 24 h (ADR-003 avsnitt 8), `FINISHED_MS` 24 h, `ABSOLUTE_MS` 0 = av (Förslag OQ-67: 72 h),
-`CREATE_PER_HOUR` 5 och `MAX_ACTIVE_SESSIONS` 50 (Förslag OQ-64), `ACTIVITY_WRITE_MS` 5 min, `SYNC_MIN_INTERVAL_MS` 4000, `FAILURES_PER_MINUTE` 10 (NFR-6).
+`CREATE_PER_HOUR` 5 och `MAX_ACTIVE_SESSIONS` 50 (beslutat, OQ-64 och OQ-72, med klartext i `message`), `ACTIVITY_WRITE_MS` 5 min, `SYNC_MIN_INTERVAL_MS` 4000, `FAILURES_PER_MINUTE` 10 (NFR-6).

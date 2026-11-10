@@ -47,13 +47,14 @@ test('skapa, slå upp med kod och länk, gå med', async () => {
   assert.equal((await h.call('/api/join', { code: s.code, name: 'BO' })).json.error, 'name_taken');
 });
 
-test('31:a deltagaren avvisas (hård spärr OQ-29)', async () => {
+test('21:a deltagaren avvisas med klartext (hård spärr OQ-29, OQ-71)', async () => {
   const h = make();
   const s = await create(h);
-  for (let i = 2; i <= 30; i++) assert.equal((await h.call('/api/join', { code: s.code, name: `D${i}` })).status, 200);
-  const r = await h.call('/api/join', { code: s.code, name: 'D31' });
+  for (let i = 2; i <= 20; i++) assert.equal((await h.call('/api/join', { code: s.code, name: `D${i}` })).status, 200);
+  const r = await h.call('/api/join', { code: s.code, name: 'D21' });
   assert.equal(r.status, 409);
   assert.equal(r.json.error, 'full');
+  assert.match(r.json.message, /20 deltagare/);
 });
 
 test('sync: rev, rate limit, ogiltigt läge, Klar kräver komplett', async () => {
@@ -153,10 +154,16 @@ test('11 felaktiga koder på en minut ger spärr (NFR-6, M7)', async () => {
 test('skapande begränsas per IP och totalt (Förslag OQ-64)', async () => {
   const h = make({ CREATE_PER_HOUR: '2', MAX_ACTIVE_SESSIONS: '3' });
   await create(h); await create(h);
-  assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(2) })).json.error, 'create_limit');
+  const lim = await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(2) });
+  assert.equal(lim.status, 429);
+  assert.equal(lim.json.error, 'create_limit');
+  assert.match(lim.json.message, /5 sessioner/);
   const o = { headers: { 'x-test-ip': '9.9.9.9' } };
   assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(2) }, o)).status, 201);
-  assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(2) }, { headers: { 'x-test-ip': '8.8.8.8' } })).json.error, 'capacity');
+  const cap = await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(2) }, { headers: { 'x-test-ip': '8.8.8.8' } });
+  assert.equal(cap.status, 429);
+  assert.equal(cap.json.error, 'capacity');
+  assert.match(cap.json.message, /50 aktiva sessioner/);
 });
 
 test('origin, metod, storlek och ogiltig JSON', async () => {
@@ -168,12 +175,12 @@ test('origin, metod, storlek och ogiltig JSON', async () => {
   assert.equal((await h.call('/api/nope', {})).status, 404);
 });
 
-test('2–30 lappar, validering av lappar och namn', async () => {
+test('2–25 lappar, validering av lappar och namn', async () => {
   const h = make();
   assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(1) })).json.error, 'too_few_notes');
-  assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(31) })).json.error, 'too_many_notes');
+  assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(26) })).json.error, 'too_many_notes');
   assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A'.repeat(16), notes: notes(2) })).json.error, 'invalid_name');
-  assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(30) })).status, 201);
+  assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(25) })).status, 201);
 });
 
 test('rejoin ger eget läge och bara sitt eget', async () => {
@@ -233,4 +240,16 @@ test('spärren gäller även över en minutgräns (glidande fönster, M7)', asyn
   for (let i = 0; i < 6; i++) codes.push((await h.call('/api/lookup', { code: 'AAAAAAAA' }, ip)).status);
   assert.deepEqual(codes, [404, 404, 404, 404, 404, 429]);
   assert.equal((await h.call('/api/lookup', { code: s.code }, ip)).status, 429);
+});
+
+test('standardtak: 5 sessioner per timme och IP samt 50 aktiva sessioner (OQ-64, OQ-72)', async () => {
+  const h = make();
+  for (let i = 0; i < 5; i++) assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(2) })).status, 201);
+  assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(2) })).json.error, 'create_limit');
+  // 10 olika IP × 5 = 50 aktiva, den 51:a nekas för kapacitet
+  for (let ip = 1; ip <= 9; ip++) {
+    for (let i = 0; i < 5; i++) assert.equal((await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(2) }, { headers: { 'x-test-ip': `7.7.7.${ip}` } })).status, 201);
+  }
+  const r = await h.call('/api/sessions', { boardName: 'x', ownerName: 'A', notes: notes(2) }, { headers: { 'x-test-ip': '7.7.7.99' } });
+  assert.equal(r.json.error, 'capacity');
 });

@@ -9,9 +9,27 @@ import {
   LIMITS, validateBoardName, validateNoteFields, SessionError,
 } from '../../src/session/session.js';
 
-export const MAX_PARTICIPANTS = 30;        // OQ-29 hård spärr
+export const MAX_PARTICIPANTS = 20;        // OQ-29, ändrat av OQ-71: hård spärr 20 deltagare (normal last 10)
 export const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ'; // utan förväxlingsbara tecken (OQ-50)
 export const CODE_LENGTH = 8;
+
+/**
+ * Klartext på svenska som skickas med i `message` (NFR-9, NFR-11, OQ-64): vad som hänt och vad man kan göra.
+ * Koden i `error` är det som klienten och testerna går på. Texterna för taken är krav (OQ-72).
+ */
+export const ERROR_MESSAGES_SV = Object.freeze({
+  create_limit: 'Du har skapat 5 sessioner den senaste timmen, vilket är högsta antalet. Vänta en stund och försök igen, eller använd en av dina sessioner.',
+  capacity: 'Tjänsten har just nu 50 aktiva sessioner, vilket är högsta antalet. Försök igen om en stund, sessioner tas bort när de stängs eller löper ut.',
+  full: 'Sessionen har redan 20 deltagare, vilket är högsta antalet. Be ägaren att skapa en ny session.',
+  too_many_notes: `Det går att ha högst ${LIMITS.MAX_NOTES} lappar. Ta bort några och försök igen.`,
+  too_few_notes: 'Det måste finnas minst två lappar.',
+  name_taken: 'Namnet används redan i sessionen. Välj ett annat.',
+  invalid_name: 'Namnet måste vara 1 till 15 tecken.',
+  not_found: 'Koden eller länken hittades inte. Kontrollera den, eller så har sessionen tagits bort eller löpt ut.',
+  too_many_attempts: 'För många felaktiga försök. Vänta en minut och försök igen.',
+  too_fast: 'För tätt mellan anropen. Vänta ett ögonblick.',
+  server_error: 'Något gick fel hos tjänsten. Försök igen om en stund.',
+});
 
 export class ApiError extends Error {
   constructor(status, code) {

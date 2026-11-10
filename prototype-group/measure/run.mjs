@@ -24,16 +24,16 @@ async function join(code, name, ip) {
 
 // ---- M1′ + M2′ (svarstid, synk, synlighet) ----
 async function m1() {
-  const s = await createSession(30);
+  const s = await createSession(25);
   const b = await join(s.code, 'Bo');
   const rand = rng(1);
-  const full = randomValues(30, rand);
+  const full = randomValues(25, rand);
   const lat = []; const readAfterWrite = []; let ok = 0;
-  const vals = emptyVector(30);
+  const vals = emptyVector(25);
   let now = T0 + 1000;
-  const order = allPairs(30);
+  const order = allPairs(25);
   for (let k = 0; k < 120; k++) {
-    for (let q = 0; q < 2; q++) { const [i, j] = order[(k * 2 + q) % order.length]; vals[pairIndex(i, j, 30)] = full[pairIndex(i, j, 30)]; }
+    for (let q = 0; q < 2; q++) { const [i, j] = order[(k * 2 + q) % order.length]; vals[pairIndex(i, j, 25)] = full[pairIndex(i, j, 25)]; }
     now += 5000;
     const w = await call('/api/sync', { ...cred(s), rev: k + 1, answers: encodeVector(vals) }, { now });
     if (w.status === 200) ok++;
@@ -46,7 +46,7 @@ async function m1() {
   const seen = await call('/api/sync', cred(b), { now: now + 5000 });
   const seenDone = seen.json.participants.find((p) => p.name === 'Anna')?.state === 'done';
   const L = summary(lat); const R = summary(readAfterWrite);
-  record("M1′", L.p95 <= 2000 ? 'OK' : 'AVVIKER', `synk (skrivning, 30 lappar) p50 ${fmt(L.p50)} ms, p95 ${fmt(L.p95)} ms, max ${fmt(L.max)} ms; läsning p95 ${fmt(R.p95)} ms; ${ok}/120 lyckade. Lokalt svar på ett val (≤100 ms) är klientlogik utan nätanrop, ej mätt här.`, { write: L, read: R });
+  record("M1′", L.p95 <= 2000 ? 'OK' : 'AVVIKER', `synk (skrivning, 25 lappar) p50 ${fmt(L.p50)} ms, p95 ${fmt(L.p95)} ms, max ${fmt(L.max)} ms; läsning p95 ${fmt(R.p95)} ms; ${ok}/120 lyckade. Lokalt svar på ett val (≤100 ms) är klientlogik utan nätanrop, ej mätt här.`, { write: L, read: R });
   const bound = 10_000 + R.p95 + L.p95;
   record("M2′", done.status === 200 && seenDone && bound <= 15_000 ? 'OK (delvis beräknad)' : 'AVVIKER', `Klar syns vid nästa läsning direkt efter skrivning (läs-efter-skriv-konsistens ${seenDone ? 'ja' : 'nej'}). Övre gräns till deltagare = pollintervall 10 s + svarstid ≈ ${fmt(bound / 1000)} s (beräknad, inte uppmätt i ett fullt pollförlopp).`);
 }
@@ -70,7 +70,7 @@ async function m3() {
     `rejoin ger eget läge och rev (${same}); flik med lägre rev avvisas 409 med serverns rev (${stale.status}, rev ${stale.json.rev}); läget ersätts, inte läggs till (${replaced}); högre rev accepteras; saknad hemlighet (ny enhet) ger generiskt 404.`);
 }
 
-// ---- M4 (10×20, 31:a, isolering) ----
+// ---- M4 (10×20, 21:a, isolering) ----
 async function m4() {
   const sessions = [];
   const lat = [];
@@ -104,25 +104,25 @@ async function m4() {
     if (names.some((n) => !(n === `Ägare${idx}` || n.startsWith(`S${idx}D`)))) isolated = false;
     if (st.json.participants.some((p) => p.state !== 'done')) isolated = false;
   }
-  // 31:a deltagaren
+  // 21:a deltagaren
   const big = await createSession(5, 'Stor');
-  for (let p = 2; p <= 30; p++) await join(big.code, `X${p}`);
-  const r31 = await call('/api/join', { code: big.code, name: 'X31' }, { ip: freshIp() });
-  // samtidig anslutning av två på plats 30
+  for (let p = 2; p <= 20; p++) await join(big.code, `X${p}`);
+  const r21 = await call('/api/join', { code: big.code, name: 'X21' }, { ip: freshIp() });
+  // samtidig anslutning av två på plats 20
   const race = await createSession(5, 'Race');
-  for (let p = 2; p <= 29; p++) await join(race.code, `R${p}`);
+  for (let p = 2; p <= 19; p++) await join(race.code, `R${p}`);
   const [a, b] = await Promise.all([call('/api/join', { code: race.code, name: 'L1' }, { ip: freshIp() }), call('/api/join', { code: race.code, name: 'L2' }, { ip: freshIp() })]);
   const raceCount = (await call('/api/sync', cred(race), { now: now + 2000 })).json.participants.length;
   const J = summary(lat);
-  record('M4', isolated && sizes.every((x) => x === 20) && r31.status === 409 && r31.json.error === 'full' && raceCount === 30 ? 'OK' : 'AVVIKER',
-    `10 sessioner × 20 deltagare: alla såg bara sina egna ${sizes.join('/')} namn, alla Klar; anslutning p95 ${fmt(J.p95)} ms; 31:a deltagaren avvisad (${r31.status} ${r31.json.error}); två samtidiga på sista platsen gav ${[a.status, b.status].sort()} och ${raceCount} deltagare.`);
+  record('M4', isolated && sizes.every((x) => x === 20) && r21.status === 409 && r21.json.error === 'full' && raceCount === 20 ? 'OK' : 'AVVIKER',
+    `10 sessioner × 20 deltagare: alla såg bara sina egna ${sizes.join('/')} namn, alla Klar; anslutning p95 ${fmt(J.p95)} ms; 21:a deltagaren avvisad (${r21.status} ${r21.json.error}); två samtidiga på sista platsen gav ${[a.status, b.status].sort()} och ${raceCount} deltagare.`);
   // städa
   for (const s of [...sessions, big, race]) await call('/api/owner/delete', { ...cred(s), ownerKey: s.ownerKey }, { now: now + 3000 });
 }
 
 // ---- M5 (resurser per pass, CPU) + M10′ + M11 (20 × 435 svar, summering) ----
 async function m10() {
-  const N = 30; const P = 20;
+  const N = 25; const P = 20;
   const s = await createSession(N, 'P0');
   const people = [s];
   for (let p = 1; p < P; p++) people.push({ ...(await join(s.code, `P${p}`)), name: `P${p}` });
@@ -211,7 +211,7 @@ async function m10() {
 // ---- M10b: verklig tid, 20 klienter ----
 async function m10b() {
   const secs = Number(process.env.REALTIME_SECONDS ?? 120);
-  const N = 30; const P = 20;
+  const N = 25; const P = 20;
   const s = await createSession(N, 'R0');
   const people = [s];
   for (let p = 1; p < P; p++) people.push({ ...(await join(s.code, `R${p}`)) });

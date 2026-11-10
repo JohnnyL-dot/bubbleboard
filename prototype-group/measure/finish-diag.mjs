@@ -1,6 +1,6 @@
-// Felsökning: bygger ett fullt pass (standard 20 deltagare × 30 lappar, ändras med P och N) snabbt och avslutar.
+// Felsökning: bygger ett fullt pass (standard 20 deltagare × 25 lappar, ändras med P och N) snabbt och avslutar.
 import { call, cred, createSession, randomValues, rng, encodeVector } from './lib.mjs';
-const N = Number(process.env.N ?? 30); const P = Number(process.env.P ?? 20);
+const N = Number(process.env.N ?? 25); const P = Number(process.env.P ?? 20);
 const s = await createSession(N, 'D0');
 const people = [s];
 for (let p = 1; p < P; p++) {

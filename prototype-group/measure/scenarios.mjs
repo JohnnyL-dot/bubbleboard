@@ -2,10 +2,11 @@
 //   normal : X = ca 7 s per jämförelse (ADR-003 avsnitt 8), ca 22 min
 //   peak   : 2X, ca 3,5 s per jämförelse, ca 11 min
 //   double : 4X, ca 1,75 s per jämförelse, ca 5,5 min
+//   two-normal, two-peak, two-double: samma tre takter med 2 samtidiga sessioner (AT-22, OQ-72)
 //   (hardpeak och twosessions: tidigare, hårdare test)
 // Varje klient har egen takt (±jitter) och egen synkfas, synkar var 10 s (endast skrivning vid ändring, annars läsning),
 // lämnar in direkt efter sista jämförelsen och väntar på att ägaren avslutar. Ingen testrubrik för tid används.
-// Kör: node measure/scenarios.mjs normal|peak|double|all   (BASE och ORIGIN som vanligt)
+// Kör: node measure/scenarios.mjs normal|peak|double|two-normal|two-peak|two-double|all|all2   (BASE och ORIGIN som vanligt)
 // TIME_SCALE<1 komprimerar tiden för en snabb rökprovning (servern måste då ha SYNC_MIN_INTERVAL_MS skalat lika).
 import { writeFileSync } from 'node:fs';
 import { call, cred, createSession, rng, allPairs, emptyVector, encodeVector, pairIndex, summary, fmt, sleep, netErrors } from './lib.mjs';
@@ -22,6 +23,10 @@ const SCENARIOS = {
   normal: { label: 'Normal last X (7 s per jämförelse)', sessions: 1, answerMs: 7000, jitter: 0.4 },
   peak: { label: 'Peaklast 2X (3,5 s per jämförelse)', sessions: 1, answerMs: 3500, jitter: 0.3 },
   double: { label: 'Dubbel peak 4X (1,75 s per jämförelse)', sessions: 1, answerMs: 1750, jitter: 0.3 },
+  // AT-22 (OQ-72): två samtidiga sessioner, samma takt som ovan.
+  'two-normal': { label: '2 samtidiga sessioner, normal last X (7 s per jämförelse)', sessions: 2, answerMs: 7000, jitter: 0.4 },
+  'two-peak': { label: '2 samtidiga sessioner, peaklast 2X (3,5 s per jämförelse)', sessions: 2, answerMs: 3500, jitter: 0.3 },
+  'two-double': { label: '2 samtidiga sessioner, dubbel peak 4X (1,75 s per jämförelse)', sessions: 2, answerMs: 1750, jitter: 0.3 },
   hardpeak: { label: 'Hård peak (2 s per jämförelse, ca 3,5X)', sessions: 1, answerMs: 2000, jitter: 0.3 },
   twosessions: { label: 'Två sessioner à 10 samtidigt, 2 s per jämförelse (ca 7X)', sessions: 2, answerMs: 2000, jitter: 0.3 },
 };
@@ -131,7 +136,7 @@ async function runScenario(name) {
 }
 
 const arg = process.argv[2] ?? 'all';
-const names = arg === 'all' ? ['normal', 'peak', 'double'] : [arg];
+const names = arg === 'all' ? ['normal', 'peak', 'double'] : arg === 'all2' ? ['two-normal', 'two-peak', 'two-double'] : [arg];
 const out = [];
 for (const n of names) {
   if (!SCENARIOS[n]) { console.log('okänt scenario', n); continue; }

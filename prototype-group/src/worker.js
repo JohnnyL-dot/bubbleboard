@@ -3,7 +3,7 @@
 // Allt som är märkt "Förslag" är en inställning för mätningen, inte ett krav (OQ-61–OQ-70).
 
 import {
-  ApiError, CODE_ALPHABET, CODE_LENGTH, MAX_PARTICIPANTS, checkSync, computeResult,
+  ApiError, ERROR_MESSAGES_SV, CODE_ALPHABET, CODE_LENGTH, MAX_PARTICIPANTS, checkSync, computeResult,
   isExpired, normalizeName, publicStatus, validateCreateBody, validateNotes,
 } from './session-core.js';
 import { emptyVector, encodeVector } from '../../src/engine/vector.js';
@@ -335,9 +335,9 @@ export async function handleRequest(request, env, store, nowOverride) {
     const out = await route({ store, body, ip, now, cfg });
     return reply(out.status ?? 200, out.body);
   } catch (err) {
-    if (err instanceof ApiError) return reply(err.status, { error: err.code, ...(err.extra ?? {}) });
+    if (err instanceof ApiError) return reply(err.status, { error: err.code, ...(ERROR_MESSAGES_SV[err.code] ? { message: ERROR_MESSAGES_SV[err.code] } : {}), ...(err.extra ?? {}) });
     // Inga detaljer i drift. I testläge (aldrig i drift) skickas felets namn och text med, för felsökning av mätningen.
-    return reply(500, { error: 'server_error', ...(cfg.testMode ? { detail: `${err?.name}: ${String(err?.message ?? err).slice(0, 300)}` } : {}) });
+    return reply(500, { error: 'server_error', message: ERROR_MESSAGES_SV.server_error, ...(cfg.testMode ? { detail: `${err?.name}: ${String(err?.message ?? err).slice(0, 300)}` } : {}) });
   }
 }
 
