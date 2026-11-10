@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klickbar prototyp OQ-46: gruppsession i egen takt</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1c2430;--mute:#5d6877;--line:#d9dee6;--acc:#1f5fbf;--ok:#1b7a3d;--work:#9a5b00;--warn:#b3261e}
+*{box-sizing:border-box}body{margin:0;font:16px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header h1{font-size:1.05rem;margin:0;flex:1}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+button{font:inherit;min-height:44px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}button.d{color:var(--warn);border-color:var(--warn)}
+button[aria-pressed=true]{background:var(--ink);color:#fff}
+main{max-width:760px;margin:0 auto;padding:16px}
+.note{background:#fff3cd;border:1px solid #e6d28a;border-radius:8px;padding:8px 12px;font-size:.9rem;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font-size:1.1rem;margin:0 0 8px}
+ul{list-style:none;margin:0;padding:0}
+li.row{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}li.row:first-child{border-top:0}
+.pl{width:2.2em;text-align:right;font-weight:700}.grow{flex:1;min-width:0}.mute{color:var(--mute);font-size:.9rem}
+.badge{font-size:.85rem;font-weight:600;padding:2px 10px;border-radius:99px;border:1px solid}
+.badge.k{color:var(--ok);border-color:var(--ok)}.badge.w{color:var(--work);border-color:var(--work)}
+.mv{display:flex;gap:4px}.mv button{min-width:44px;padding:0}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.modal{position:fixed;inset:0;background:rgba(20,30,45,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal[hidden]{display:none}.box{background:#fff;border-radius:12px;padding:20px;max-width:420px;width:100%}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pair button{min-height:96px;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="ttl">Bubble · Kundträff, prioritering</h1>
+  <nav aria-label="Vyer i prototypen">
+    <button data-v="owner" aria-pressed="true">Ägare: Översikt</button>
+    <button data-v="part">Deltagare: sortera</button>
+    <button data-v="res">Resultat</button>
+  </nav>
+</header>
+<main>
+  <div class="note">Prototyp för OQ-46. Allt är exempeldata i webbläsaren, ingen server. Inga räknare visas för andra deltagare (OQ-56) och ingen ser någon annans val (OQ-16).</div>
+  <section id="owner"></section>
+  <section id="part" hidden></section>
+  <section id="res" hidden></section>
+</main>
+<div class="modal" id="dlg" hidden role="dialog" aria-modal="true" aria-labelledby="dt">
+  <div class="box"><h2 id="dt">Vill du spara?</h2>
+    <p>Sessionen stängs och raderas för alla. Du har inte sparat resultatet. Deltagare som inte hunnit öppna det förlorar åtkomsten.</p>
+    <div class="bar"><button class="p" id="yes">Ja, spara och stäng</button><button class="d" id="no">Nej, stäng utan fil</button><button id="cancel">Avbryt</button></div>
+  </div>
+</div>
+<div class="modal" id="fin" hidden role="dialog" aria-modal="true" aria-labelledby="ft">
+  <div class="box"><h2 id="ft">Avsluta prioriteringen?</h2>
+    <p>2 deltagare är inte klara. Resultatet märks då <b>Preliminärt</b> och bygger på de jämförelser de hunnit göra. Det går inte att ångra.</p>
+    <div class="bar"><button class="p" id="fy">Avsluta</button><button id="fc">Avbryt</button></div>
+  </div>
+</div>
+<script>
+const notes=['Gemensam kalender','Snabbare inloggning','Mörkt läge','Exportera till Excel','Mobilapp','Påminnelser','Delningslänk','Sök i allt'];
+let order=notes.map((_,i)=>i);
+let people=[['Anna (ägare)','k'],['Bo','k'],['Cia','w'],['Dan','w'],['Eva','k']];
+let finished=false,saved=false,closed=false,prelim=true,step=0;
+const $=s=>document.querySelector(s);
+function show(v){document.querySelectorAll('main section').forEach(s=>s.hidden=s.id!==v);
+  document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v));render()}
+function plist(){return `<ul>${people.map(([n,s])=>`<li class="row"><span class="grow">${n}</span><span class="badge ${s}">${s==='k'?'Klar':'Pågår'}</span></li>`).join('')}</ul>`}
+function render(){
+  if(closed){$('#owner').innerHTML=$('#part').innerHTML=$('#res').innerHTML='<div class="card"><h2>Sessionen är stängd</h2><p>Allt är raderat. <button onclick="reset()">Börja om prototypen</button></p></div>';return}
+  $('#owner').innerHTML=`<div class="card"><h2>Översikt</h2>
+    <p class="mute">Status: ${finished?'Avslutad':'Pågår'} · Kod 7K2M4PQX visas för ägaren (ingen kod i sparade filer eller kopierad text)</p></div>
+    <div class="card"><h2>Deltagare</h2>${plist()}
+    <p class="mute">Alla ser bara Klar eller Pågår. Ingen ser vad någon valt eller hur många jämförelser som är gjorda.</p>
+    <div class="bar">${finished?'':'<button class="p" id="fbtn">Avsluta prioriteringen</button>'}${finished?'<button id="sv">Spara resultat som fil</button> ':''}<button class="d" id="cl">Stäng sessionen</button></div></div>
+    <div class="card"><h2>Lappar</h2><ul>${notes.map(n=>`<li class="row"><span class="grow">${n}</span></li>`).join('')}</ul><p class="mute">Lappar kan ändras bara innan någon har svarat (OQ-60).</p></div>`;
+  const f=$('#fbtn');if(f)f.onclick=()=>$('#fin').hidden=false;
+  const sv=$('#sv');if(sv)sv.onclick=()=>{saved=true;sv.textContent='Sparad'};
+  $('#cl').onclick=()=>{if(saved)closed=true,render();else $('#dlg').hidden=false};
+  const total=3;
+  $('#part').innerHTML=finished?'<div class="card"><h2>Prioriteringen är avslutad</h2><p>Du ser summeringen under Resultat.</p></div>':`<div class="card"><h2>Vilken är viktigast?</h2>
+    <p class="mute">Ingen räknare visas.</p><div class="pair"><button data-c="0">${notes[step%8]}</button><button data-c="1">${notes[(step+3)%8]}</button></div>
+    <div class="bar"><button data-c="2">Lika viktiga</button><button id="und" ${step?'':'disabled'}>Ångra senaste</button></div>
+    ${step>=3?'<div class="bar"><button class="p" id="sub">Lämna in värdering</button></div>':''}</div>
+    <div class="card"><h2>Deltagare</h2>${plist()}</div>`;
+  document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{step++;render()});
+  const u=$('#und');if(u)u.onclick=()=>{step=Math.max(0,step-1);render()};
+  const sb=$('#sub');if(sb)sb.onclick=()=>{people[2][1]='k';render();alert_('Din värdering är inlämnad och kan inte ändras. Status: Klar.')};
+  const rows=order.map((i,r)=>`<li class="row"><span class="pl">${r+1}</span><span class="grow">${notes[i]}</span>${finished?`<span class="mute">${(24-r*3)} p</span><span class="mv"><button aria-label="Flytta upp ${notes[i]}" data-u="${r}" ${r?'':'disabled'}>↑</button><button aria-label="Flytta ned ${notes[i]}" data-d="${r}" ${r<7?'':'disabled'}>↓</button></span>`:''}</li>`).join('');
+  $('#res').innerHTML=finished?`<div class="card"><h2>Resultat ${prelim?'<span class="badge w">Preliminärt</span>':''}</h2><ul>${rows}</ul>
+    <p class="mute">Bara ägaren kan flytta lappar, spara och kopiera. Deltagare ser resultatet men har ingen spar- eller kopieringsfunktion.</p>
+    <div class="bar"><button id="sv2">Spara resultat som fil</button><button id="cp">Kopiera resultat (tabbavgränsat)</button></div></div>`:'<div class="card"><h2>Resultat</h2><p>Finns först när ägaren har avslutat prioriteringen.</p></div>';
+  document.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{const r=+b.dataset.u;[order[r-1],order[r]]=[order[r],order[r-1]];render()});
+  document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const r=+b.dataset.d;[order[r+1],order[r]]=[order[r],order[r+1]];render()});
+  const s2=$('#sv2');if(s2)s2.onclick=()=>{saved=true;s2.textContent='Sparad'};
+  const cp=$('#cp');if(cp)cp.onclick=()=>{saved=true;cp.textContent='Kopierat'};
+}
+function alert_(t){const n=document.createElement('div');n.className='note';n.textContent=t;$('main').prepend(n);setTimeout(()=>n.remove(),4000)}
+function reset(){finished=saved=closed=false;prelim=true;step=0;order=notes.map((_,i)=>i);people=[['Anna (ägare)','k'],['Bo','k'],['Cia','w'],['Dan','w'],['Eva','k']];show('owner')}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
+$('#fy').onclick=()=>{finished=true;$('#fin').hidden=true;show('res')};$('#fc').onclick=()=>$('#fin').hidden=true;
+$('#yes').onclick=()=>{saved=true;closed=true;$('#dlg').hidden=true;render()};
+$('#no').onclick=()=>{closed=true;$('#dlg').hidden=true;render()};$('#cancel').onclick=()=>$('#dlg').hidden=true;
+render();
+</script>
+</body>
+</html>
