@@ -21,4 +21,4 @@ npm test                             # API-tester mot minneslagring
 
 ## Parametrar (miljövariabler, standardvärden)
 `INACTIVITY_MS` 24 h (ADR-003 avsnitt 8), `FINISHED_MS` 24 h, `ABSOLUTE_MS` 0 = av (Förslag OQ-67: 72 h),
-`CREATE_PER_HOUR` 5 och `MAX_ACTIVE_SESSIONS` 50 (Förslag OQ-64), `SYNC_MIN_INTERVAL_MS` 4000, `FAILURES_PER_MINUTE` 10 (NFR-6).
+`CREATE_PER_HOUR` 5 och `MAX_ACTIVE_SESSIONS` 50 (Förslag OQ-64), `ACTIVITY_WRITE_MS` 5 min, `SYNC_MIN_INTERVAL_MS` 4000, `FAILURES_PER_MINUTE` 10 (NFR-6).

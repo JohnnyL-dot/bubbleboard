@@ -23,6 +23,7 @@ export function configFrom(env = {}) {
     absoluteMs: num(env.ABSOLUTE_MS, 0),                   // Förslag OQ-67 (72 h). 0 = av.
     createPerHour: num(env.CREATE_PER_HOUR, 5),            // Förslag OQ-64
     maxActiveSessions: num(env.MAX_ACTIVE_SESSIONS, 50),   // Förslag OQ-64
+    activityWriteMs: num(env.ACTIVITY_WRITE_MS, 5 * MINUTE), // hur ofta last_activity får skrivas vid synk
     syncMinIntervalMs: num(env.SYNC_MIN_INTERVAL_MS, 4000),
     failuresPerMinute: num(env.FAILURES_PER_MINUTE, 10),   // NFR-6
   };
@@ -232,9 +233,11 @@ const routes = {
       await store.updateParticipant(session.sid, participant.pid, {
         rev: body.rev, answers: next.answers, answered: next.answered, done: next.done ? 1 : 0, updated_at: now,
       });
-      const fields = { last_activity: now };
+      // Aktivitetsstämpeln skrivs högst var ACTIVITY_WRITE_MS (Johnny 2026-11-10: får skrivas mer sällan), för att halvera D1-skrivningarna.
+      const fields = {};
+      if (now - session.last_activity >= cfg.activityWriteMs) fields.last_activity = now;
       if (!session.started && next.answered > 0) fields.started = 1; // Pågår börjar när någon påbörjat sorteringen (TC-091)
-      await store.updateSession(session.sid, fields);
+      if (Object.keys(fields).length) await store.updateSession(session.sid, fields);
       Object.assign(session, fields);
       participant = { ...participant, rev: body.rev, done: next.done ? 1 : 0 };
       wrote = true;

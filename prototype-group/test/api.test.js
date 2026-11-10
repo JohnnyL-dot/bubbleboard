@@ -208,3 +208,16 @@ test('inga hemligheter i svar till andra: länktoken, ägarnyckel, kod', async (
   const r = JSON.stringify((await h.call('/api/sync', cred(b))).json) + JSON.stringify((await h.call('/api/rejoin', cred(b))).json);
   for (const secret of [s.ownerKey, s.linkToken, s.code, s.secret]) assert.ok(!r.includes(secret));
 });
+
+test('aktivitetsstämpeln skrivs högst var 5:e minut men förlänger sessionen', async () => {
+  const h = make();
+  const s = await create(h);
+  const v = (k) => encodeVector(Object.assign(emptyVector(4), { [pairIndex(0, 1, 4)]: LOW_WON, [pairIndex(0, 2, 4)]: k }));
+  const t0 = h.store._dump().sessions[0].last_activity;
+  h.clock.advance(10_000);
+  await h.call('/api/sync', { ...cred(s), rev: 1, answers: v(1) });
+  assert.equal(h.store._dump().sessions[0].last_activity, t0);
+  h.clock.advance(300_000);
+  await h.call('/api/sync', { ...cred(s), rev: 2, answers: v(2) });
+  assert.ok(h.store._dump().sessions[0].last_activity > t0);
+});
