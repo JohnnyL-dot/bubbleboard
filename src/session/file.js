@@ -81,7 +81,7 @@ export function parseFile(text) {
   const boardName = validateBoardName(nfc(data.namn));
   if (!Array.isArray(data.lappar)) fail('FILE_INVALID');
   if (data.lappar.length < LIMITS.MIN_NOTES) fail('MIN_NOTES');
-  if (data.lappar.length > LIMITS.MAX_NOTES) fail('MAX_NOTES');
+  if (data.lappar.length > LIMITS.MAX_NOTES) fail('FILE_TOO_MANY_NOTES'); // OQ-72: äldre filer med 26–30 lappar avvisas, inget kortas i tysthet
 
   const ids = new Set();
   const notes = data.lappar.map((raw) => {

@@ -4,7 +4,7 @@
 // Individuellt läge följer samma flöde som en gruppdeltagares sortering (OQ-59, OQ-60):
 // alla par besvaras ett i taget, "Ångra senaste" tar bort senaste svaret, och
 // summeringen av en enda deltagare är deltagarens egen rangordning.
-// Gruppsession mot server är inte byggd (KR-13, OQ-51).
+// Gruppsession mot server är inte byggd (KR-13, OQ-51: mätprototyp på grenen prototype-group).
 //
 // Fel kastas som SessionError med en kod som gränssnittet översätter (NFR-11).
 
@@ -14,7 +14,7 @@ import { summarize } from '../engine/summering.js';
 
 export const LIMITS = Object.freeze({
   MIN_NOTES: 2,          // OQ-34
-  MAX_NOTES: 30,         // OQ-34, ändrat av OQ-58
+  MAX_NOTES: 25,         // OQ-34, ändrat av OQ-58 och OQ-71 (bekräftat i OQ-72)
   TITLE_MAX: 100,        // OQ-33
   DESCRIPTION_MAX: 500,  // OQ-33
   CATEGORY_MAX: 30,      // OQ-33

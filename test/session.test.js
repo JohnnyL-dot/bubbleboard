@@ -51,13 +51,13 @@ test('emoji räknas som ett tecken (TF-1)', () => {
   assert.equal(code(() => s.addNote(s.ownerId, { title: '😀'.repeat(101) })), 'TITLE_TOO_LONG');
 });
 
-test('lappgränser: 30 lappar går, den 31:a avvisas (KR-1, OQ-58)', () => {
-  assert.equal(LIMITS.MAX_NOTES, 30);
-  const s = withNotes(30);
-  assert.equal(s.notes.length, 30);
-  assert.equal(code(() => s.addNote(s.ownerId, { title: 'trettioen' })), 'MAX_NOTES');
+test('lappgränser: 25 lappar går, den 26:e avvisas (KR-1, OQ-71)', () => {
+  assert.equal(LIMITS.MAX_NOTES, 25);
+  const s = withNotes(25);
+  assert.equal(s.notes.length, 25);
+  assert.equal(code(() => s.addNote(s.ownerId, { title: 'tjugosex' })), 'MAX_NOTES');
   assert.equal(code(() => s.duplicateNote(s.ownerId, s.notes[0].id)), 'MAX_NOTES');
-  assert.equal(s.notes.length, 30);
+  assert.equal(s.notes.length, 25);
 });
 
 test('start kräver minst 2 lappar (OQ-34)', () => {
@@ -85,10 +85,10 @@ test('bara ägaren får ändra (KR-3)', () => {
 
 // ---- Sortering (KR-6, KR-12, KR-30) ----
 
-test('alla unika par besvaras: 30 lappar ger 435 jämförelser (KR-30, OQ-58)', () => {
-  const s = withNotes(30);
+test('alla unika par besvaras: 25 lappar ger 300 jämförelser (KR-30, OQ-71)', () => {
+  const s = withNotes(25);
   s.start('p1');
-  assert.deepEqual(s.progress(), { decided: 0, remaining: 435, total: 435 });
+  assert.deepEqual(s.progress(), { decided: 0, remaining: 300, total: 300 });
   const seen = new Set();
   while (s.currentPair()) {
     const p = s.currentPair();
@@ -96,9 +96,9 @@ test('alla unika par besvaras: 30 lappar ger 435 jämförelser (KR-30, OQ-58)', 
     seen.add(p.id);
     s.answer('left');
   }
-  assert.equal(seen.size, 435);
+  assert.equal(seen.size, 300);
   assert.equal(s.allPairsDecided(), true);
-  assert.deepEqual(s.progress(), { decided: 435, remaining: 0, total: 435 });
+  assert.deepEqual(s.progress(), { decided: 300, remaining: 0, total: 300 });
 });
 
 test('framsteg visas för användaren själv (KR-12)', () => {
@@ -250,11 +250,11 @@ test('moveNoteTo flyttar till index och begränsar till listan', () => {
   assert.deepEqual([...s.overviewOrder()].sort(), ['n1', 'n2', 'n3', 'n4', 'n5']);
 });
 
-test('manuell ordning fungerar med 30 lappar och är alltid en permutation', () => {
-  const s = withNotes(30);
-  for (let i = 0; i < 100; i++) s.moveNoteTo('p1', `n${(i * 7) % 30 + 1}`, (i * 13) % 30);
-  assert.equal(new Set(s.overviewOrder()).size, 30);
-  assert.equal(s.overviewOrder().length, 30);
+test('manuell ordning fungerar med 25 lappar och är alltid en permutation', () => {
+  const s = withNotes(25);
+  for (let i = 0; i < 100; i++) s.moveNoteTo('p1', `n${(i * 7) % 25 + 1}`, (i * 13) % 25);
+  assert.equal(new Set(s.overviewOrder()).size, 25);
+  assert.equal(s.overviewOrder().length, 25);
 });
 
 test('återställ ger skapandeordning i Översikten och automatisk ordning i resultatet', () => {
@@ -333,7 +333,7 @@ test('restore avvisar trasig lagrad data (opålitlig indata)', () => {
   assert.equal(bad((x) => { x.manualOrder = ['n1', 'n2']; }), 'SNAPSHOT_INVALID');
   assert.equal(bad((x) => { x.nextNoteId = 1; }), 'SNAPSHOT_INVALID');
   assert.equal(bad((x) => { x.queue = 'x'; }), 'SNAPSHOT_INVALID');
-  assert.equal(bad((x) => { x.notes = new Array(31).fill(x.notes[0]); }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.notes = new Array(26).fill(x.notes[0]); }), 'SNAPSHOT_INVALID');
 });
 
 test('snapshot innehåller inga hemligheter eller nycklar', () => {

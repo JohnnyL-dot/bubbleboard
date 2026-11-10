@@ -89,11 +89,11 @@ test('rundtur: resultat läses in skrivskyddat med samma ordning och poäng', ()
   assert.equal(f.resultat.manuell.length, 3);
 });
 
-test('30 lappar går att spara och läsa in, 31 avvisas (OQ-58)', () => {
-  assert.equal(parseFile(serializeFile(board(30))).notes.length, 30);
+test('25 lappar går att spara och läsa in, 26 avvisas (OQ-71, OQ-72)', () => {
+  assert.equal(parseFile(serializeFile(board(25))).notes.length, 25);
   const o = valid();
-  o.lappar = Array.from({ length: 31 }, (_, i) => ({ id: i + 1, t: `L${i}` }));
-  assert.equal(code(() => parseFile(text(o))), 'MAX_NOTES');
+  o.lappar = Array.from({ length: 26 }, (_, i) => ({ id: i + 1, t: `L${i}` }));
+  assert.equal(code(() => parseFile(text(o))), 'FILE_TOO_MANY_NOTES');
   o.lappar = o.lappar.slice(0, 1);
   assert.equal(code(() => parseFile(text(o))), 'MIN_NOTES');
 });

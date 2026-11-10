@@ -10,7 +10,7 @@ export const sv = {
   'start.alias': 'Ditt namn eller alias',
   'start.individual': 'Prioritera själv',
   'start.group': 'Gruppsession',
-  'start.groupSoon': 'Gruppsession är inte tillgänglig ännu. Den väntar på att realtidslösningen väljs (OQ-51).',
+  'start.groupSoon': 'Gruppsession är inte tillgänglig ännu.',
 
   'mode.prepared': 'Förberedd',
   'mode.running': 'Pågår',
@@ -116,6 +116,7 @@ export const sv = {
 
   'storage.unavailable': 'Webbläsaren tillåter inte lokal lagring (till exempel i privat läge). Ditt arbete försvinner om du laddar om sidan. Spara en fil för att behålla det.',
   'storage.failed': 'Det gick inte att spara arbetet i webbläsaren (lagringen är full eller nekad). Spara en fil för att behålla det.',
+  'storage.tooMany': 'Det sparade arbetet i webbläsaren hade fler än 25 lappar, vilket inte längre är tillåtet, och har tagits bort. Börja om eller läs in en fil med högst 25 lappar.',
   'storage.corrupt': 'Det sparade arbetet i webbläsaren gick inte att läsa och har tagits bort. Börja om eller läs in en fil.',
 
   'error.BOARD_NAME_EMPTY': 'Boarden behöver ett namn. Skriv ett namn och försök igen.',
@@ -127,7 +128,8 @@ export const sv = {
   'error.DESCRIPTION_TOO_LONG': 'Beskrivningen är för lång (högst 500 tecken).',
   'error.CATEGORY_TOO_LONG': 'Kategorin är för lång (högst 30 tecken).',
   'error.COLOR_INVALID': 'Välj en färg ur paletten.',
-  'error.MAX_NOTES': 'Det finns redan 30 lappar, vilket är högsta antalet. Ta bort en lapp för att lägga till en ny.',
+  'error.MAX_NOTES': 'Det finns redan 25 lappar, vilket är högsta antalet. Ta bort en lapp för att lägga till en ny.',
+  'error.FILE_TOO_MANY_NOTES': 'Filen har fler än 25 lappar. Högst 25 lappar går att läsa in, så filen har inte lästs in och inga lappar har ändrats.',
   'error.MIN_NOTES': 'Det måste finnas minst två lappar.',
   'error.NOTES_LOCKED': 'Lappar kan inte läggas till när sorteringen har startat.',
   'error.WRONG_MODE': 'Det går inte att göra det i det här läget.',

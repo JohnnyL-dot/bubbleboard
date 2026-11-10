@@ -17,7 +17,7 @@ export function targetIndex(mids, from, y) {
 
 /**
  * Hur många pixlar sidan ska rullas när pekaren är nära kanten, så att en lång
- * lista (30 rader) går att dra i.
+ * lista (25 rader) går att dra i.
  * @returns {number} negativt uppåt, positivt nedåt, 0 när ingen rullning behövs
  */
 export function scrollDelta(y, viewportHeight, edge = 60, maxSpeed = 18) {

@@ -65,7 +65,7 @@ export function findCycles(noteIds, comparisons) {
     if (c.outcome === 'left') adj.get(c.left)?.push(c.right);
     else if (c.outcome === 'right') adj.get(c.right)?.push(c.left);
   }
-  // Tarjans algoritm (iterativ rekursion är onödig vid max 30 lappar).
+  // Tarjans algoritm (iterativ rekursion är onödig vid max 25 lappar).
   let index = 0;
   const idx = new Map();
   const low = new Map();
