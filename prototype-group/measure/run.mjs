@@ -168,6 +168,7 @@ async function m10() {
     else if (x === HIGH_WON) expectedPts.set(`n${j + 1}`, expectedPts.get(`n${j + 1}`) + 1);
     else { expectedPts.set(`n${i + 1}`, expectedPts.get(`n${i + 1}`) + 0.5); expectedPts.set(`n${j + 1}`, expectedPts.get(`n${j + 1}`) + 0.5); }
   }
+  if (fin.status !== 200 || !fin.json?.result) throw new Error(`avslut misslyckades: status ${fin.status}, svar ${fin.text.slice(0, 300)}`);
   const rows = fin.json.result.rows;
   const pointsOk = rows.every((r) => r.points === expectedPts.get(r.id));
   const sortedOk = rows.every((r, i) => i === 0 || rows[i - 1].points >= r.points);
