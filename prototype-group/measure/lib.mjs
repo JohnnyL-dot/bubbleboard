@@ -3,7 +3,7 @@ import { performance } from 'node:perf_hooks';
 import { emptyVector, encodeVector, pairIndex, LOW_WON, HIGH_WON, EQUAL } from '../../src/engine/vector.js';
 
 export const BASE = process.env.BASE ?? 'http://localhost:8787';
-export const ORIGIN = 'http://localhost:8787';
+export const ORIGIN = process.env.ORIGIN ?? 'http://localhost:8787';
 
 export async function call(path, body, { ip, now, origin = ORIGIN } = {}) {
   const headers = { origin, 'content-type': 'application/json' };

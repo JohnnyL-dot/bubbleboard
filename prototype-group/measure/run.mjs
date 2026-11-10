@@ -284,8 +284,8 @@ async function m9() {
   const fin1 = await call('/api/lookup', { code: f.code }, { ip: freshIp(), now: base + 20 * 3600_000 });
   const fin2 = await call('/api/lookup', { code: f.code }, { ip: freshIp(), now: base + 26 * 3600_000 });
   void before; void old;
-  record('M9', act.status === 200 && stillThere.status === 200 && poll.status === 200 && gone.status === 404 && c2 === c1 - 1 && sched.status === 200 && fin1.status === 200 && fin2.status === 404 ? 'OK (med tidsstyrning)' : 'AVVIKER',
-    `23 h efter skapande finns sessionen (skrivning förlänger), 24 h efter senaste skrivning är den oåtkomlig trots polling i mellantiden (polling räknas inte): ${gone.status}; cron-rensning tog bort ${c1 - c2} utgången session (via /cdn-cgi/handler/scheduled); avslutad session nåbar efter 20 h (${fin1.status}), borta efter 26 h (${fin2.status}). Tiden är styrd med testrubrik, inte väntad. Taket 72 h (Förslag OQ-67) är av som standard och ej provat.`);
+  record('M9', act.status === 200 && stillThere.status === 200 && poll.status === 200 && gone.status === 404 && (sched.status !== 200 || c2 === c1 - 1) && fin1.status === 200 && fin2.status === 404 ? 'OK (med tidsstyrning)' : 'AVVIKER',
+    `23 h efter skapande finns sessionen (skrivning förlänger), 24 h efter senaste skrivning är den oåtkomlig trots polling i mellantiden (polling räknas inte): ${gone.status}; cron-rensning ${sched.status === 200 ? `tog bort ${c1 - c2} utgången session (via /cdn-cgi/handler/scheduled)` : 'ej provad här (ingen manuell cron-ingång i driftmiljön)'}; avslutad session nåbar efter 20 h (${fin1.status}), borta efter 26 h (${fin2.status}). Tiden är styrd med testrubrik, inte väntad. Taket 72 h (Förslag OQ-67) är av som standard och ej provat.`);
 }
 
 // ---- M12 avslut mitt i synk ----

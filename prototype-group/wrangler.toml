@@ -1,14 +1,14 @@
 # Mätprototyp, körs lokalt: npm run dev (wrangler dev --local). Inget konto behövs.
-# Ingen account_id, inget database_id och ingen token finns här. När Johnny skapar en
-# D1-databas (jurisdiktion eu) fyller han i database_id vid deploy.
+# Ingen account_id och ingen token finns här. database_id är D1-databasen i EU som Johnny skapade
+# 2026-11-10 (ett id, inte en hemlighet). Lokalt används en egen lokal databas oavsett id.
 name = "bubble-prototype-group"
 main = "src/worker.js"
 compatibility_date = "2026-01-01"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "bubble-proto"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_name = "bubble-prototype"
+database_id = "20a10f01-5a87-4de8-b3e6-10777885d741"
 migrations_dir = "migrations"
 
 [triggers]
