@@ -3,6 +3,7 @@
 
 export const sv = {
   'app.title': 'Prioriteringsboard',
+  'app.version': 'Version {version}',
   'app.tagline': 'Jämför lappar två och två och få en rangordning.',
 
   'start.boardName': 'Namn på boarden',

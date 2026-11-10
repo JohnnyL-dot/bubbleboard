@@ -8,6 +8,7 @@ import {
 } from '../session/session.js';
 import { createStore } from '../session/storage.js';
 import { MAX_FILE_BYTES, fileName, parseFile, serializeFile } from '../session/file.js';
+import { VERSION } from '../version.js';
 import { sv, t as translate, errorText } from '../i18n/sv.js';
 import { placeLabel, resultTsv } from './format.js';
 import { scrollDelta, targetIndex } from './reorder.js';
@@ -65,6 +66,12 @@ export function mount(root, {
   live.setAttribute('aria-live', 'polite');
   live.setAttribute('role', 'status');
   if (root.parentNode) root.insertAdjacentElement('afterend', live);
+
+  // Versionsnummer längst ner till höger, utanför det som ritas om.
+  const versionEl = doc.createElement('footer');
+  versionEl.className = 'app-version';
+  versionEl.textContent = t('app.version', { version: VERSION });
+  if (root.parentNode) root.insertAdjacentElement('afterend', versionEl);
 
   const owner = () => state.session.ownerId;
   const emptyDraft = () => ({ title: '', description: '', category: '', color: '' });

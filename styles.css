@@ -94,3 +94,7 @@ input, select, textarea {
 .drop-after { box-shadow: 0 4px 0 0 #2563eb; }
 .rank-row.manual .move { grid-column: 2; }
 .file-load input { display: block; margin-top: 4px; max-width: 100%; }
+
+/* Versionsnummer längst ner till höger */
+body { padding-bottom: 32px; }
+.app-version { position: fixed; right: 8px; bottom: 6px; font-size: .75rem; color: var(--muted); background: var(--card); padding: 2px 6px; border-radius: 6px; pointer-events: none; }

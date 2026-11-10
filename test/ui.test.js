@@ -617,3 +617,14 @@ test('alla gränssnittstexter finns i språkfilen (NFR-11)', async () => {
     assert.ok(`error.${code}` in sv, code);
   }
 });
+
+test('versionsnumret visas längst ner och följer package.json och taggen', async () => {
+  const fs = await import('node:fs');
+  const { VERSION } = await import('../src/version.js');
+  const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(VERSION, pkg.version);
+  assert.match(VERSION, /^\d+\.\d+\.\d+$/);
+  const { dom } = setup();
+  const el = dom.window.document.querySelector('.app-version');
+  assert.equal(el.textContent, `Version ${VERSION}`);
+});
