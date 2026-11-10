@@ -336,7 +336,8 @@ export async function handleRequest(request, env, store, nowOverride) {
     return reply(out.status ?? 200, out.body);
   } catch (err) {
     if (err instanceof ApiError) return reply(err.status, { error: err.code, ...(err.extra ?? {}) });
-    return reply(500, { error: 'server_error' }); // inga detaljer, inget loggas
+    // Inga detaljer i drift. I testläge (aldrig i drift) skickas felets namn och text med, för felsökning av mätningen.
+    return reply(500, { error: 'server_error', ...(cfg.testMode ? { detail: `${err?.name}: ${String(err?.message ?? err).slice(0, 300)}` } : {}) });
   }
 }
 
