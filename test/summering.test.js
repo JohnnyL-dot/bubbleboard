@@ -128,3 +128,16 @@ test('motorn är ren: indata ändras inte', () => {
   summarize(ids(2), parts);
   assert.deepEqual(parts, copy);
 });
+
+test('hårda gränser: 20 deltagare × 25 lappar summeras rätt och snabbt (KR-14, OQ-71)', () => {
+  const rng = createRng(11);
+  const notes = ids(25);
+  const participants = Array.from({ length: 20 }, () => randomParticipant(notes, rng, 1));
+  const t0 = performance.now();
+  const { rows, comparisonCount } = summarize(notes, participants);
+  assert.ok(performance.now() - t0 < 200);
+  assert.equal(comparisonCount, 20 * 300);
+  const totalPoints = rows.reduce((a, r) => a + r.points, 0);
+  assert.equal(totalPoints, 20 * 300, 'varje jämförelse delar ut exakt 1 poäng');
+  assert.equal(rows.length, 25);
+});

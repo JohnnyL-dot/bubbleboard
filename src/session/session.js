@@ -14,7 +14,7 @@ import { summarize } from '../engine/summering.js';
 
 export const LIMITS = Object.freeze({
   MIN_NOTES: 2,          // OQ-34
-  MAX_NOTES: 30,         // OQ-34, ändrat av OQ-58
+  MAX_NOTES: 25,         // OQ-34, ändrat av OQ-58 och OQ-71 (bekräftat i OQ-72)
   TITLE_MAX: 100,        // OQ-33
   DESCRIPTION_MAX: 500,  // OQ-33
   CATEGORY_MAX: 30,      // OQ-33

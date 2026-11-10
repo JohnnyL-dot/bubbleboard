@@ -85,15 +85,18 @@ export function mount(root, {
     if (!store.save(state.session.snapshot())) state.storageOk = false;
   }
 
+  let saved = null;
   try {
-    const saved = store.load();
+    saved = store.load();
     if (saved) {
       state.session = Session.restore(saved);
       state.view = state.session.mode === MODE.RUNNING ? 'sort' : 'overview';
     }
   } catch {
+    // Sparat arbete från version 1.0.x kan ha 26–30 lappar (högst 25 sedan OQ-71). Säg det rakt ut.
+    const tooMany = Array.isArray(saved?.notes) && saved.notes.length > LIMITS.MAX_NOTES;
     store.clear();
-    state.storageNote = t('storage.corrupt');
+    state.storageNote = t(tooMany ? 'storage.tooMany' : 'storage.corrupt');
   }
 
   // ---------- Hjälpare ----------

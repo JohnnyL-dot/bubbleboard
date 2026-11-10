@@ -93,19 +93,19 @@ test('tom titel ger felmeddelande och lappen skapas inte (AT-1)', () => {
   assert.equal($$('.note').length, 0);
 });
 
-test('HTML i lapptext visas som text, 30 lappar går och den 31:a avvisas (AT-1, OQ-58)', () => {
+test('HTML i lapptext visas som text, 25 lappar går och den 26:e avvisas (AT-1, OQ-71)', () => {
   const { $, $$, root, begin, addNote } = setup();
   begin();
   addNote('<img src=x onerror=alert(1)>', { color: 'blue' });
   assert.equal(root.querySelectorAll('img').length, 0);
   assert.match($('.note-title').textContent, /<img/);
   assert.match($('.note').textContent, /Blå/, 'färgen står även som text');
-  for (let i = 2; i <= 30; i++) addNote(`Lapp ${i}`);
-  assert.equal($$('.note').length, 30);
-  assert.match($('.count').textContent, /30 av 30 lappar/);
-  addNote('Lapp 31');
-  assert.match($('.error').textContent, /30 lappar/);
-  assert.equal($$('.note').length, 30);
+  for (let i = 2; i <= 25; i++) addNote(`Lapp ${i}`);
+  assert.equal($$('.note').length, 25);
+  assert.match($('.count').textContent, /25 av 25 lappar/);
+  addNote('Lapp 26');
+  assert.match($('.error').textContent, /25 lappar/);
+  assert.equal($$('.note').length, 25);
 });
 
 test('för lång titel ger felmeddelande i stället för att tyst klippas (TC-005)', () => {
@@ -246,12 +246,12 @@ test('fast seed från mount ger samma par i samma ordning (TF-8)', () => {
   assert.deepEqual(order(7), order(7));
 });
 
-test('30 lappar ger 435 jämförelser i sorteringsläget (KR-30)', () => {
+test('25 lappar ger 300 jämförelser i sorteringsläget (KR-30, OQ-71)', () => {
   const { $, action, begin, addNote } = setup();
   begin();
-  for (let i = 1; i <= 30; i++) addNote(`L${i}`);
+  for (let i = 1; i <= 25; i++) addNote(`L${i}`);
   action('start');
-  assert.match($('.progress').textContent, /0 av 435 jämförelser klara/);
+  assert.match($('.progress').textContent, /0 av 300 jämförelser klara/);
 });
 
 // ---- Resultat, kopiering, manuell ordning ----
@@ -384,13 +384,13 @@ test('Översikt: flera drag- och flyttknappar har tillgängliga namn med lappens
   assert.match($$('[data-action="move"]')[1].getAttribute('aria-label'), /Flytta ner: A/);
 });
 
-test('Översikt: dra och släpp med pekare flyttar lappen (30 lappar)', () => {
+test('Översikt: dra och släpp med pekare flyttar lappen (25 lappar)', () => {
   const ctx = setup();
   const { $$, begin, addNote, titles, dom, app } = ctx;
   begin();
-  for (let i = 1; i <= 30; i++) addNote(`L${i}`);
+  for (let i = 1; i <= 25; i++) addNote(`L${i}`);
   const rows = $$('.sortable > li');
-  assert.equal(rows.length, 30);
+  assert.equal(rows.length, 25);
   rows.forEach((r, i) => { r.getBoundingClientRect = () => ({ top: i * 50, height: 50, bottom: i * 50 + 50 }); });
   const ev = (type, y) => {
     const e = new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, clientY: y, button: 0 });
@@ -404,7 +404,7 @@ test('Översikt: dra och släpp med pekare flyttar lappen (30 lappar)', () => {
   assert.ok(rows[0].style.transform.includes('105px'));
   handle.dispatchEvent(ev('pointerup', 130));
   const t = titles();
-  assert.equal(t.length, 30);
+  assert.equal(t.length, 25);
   assert.equal(t[2], 'L1', 'L1 passerade L2 och L3');
   assert.deepEqual(app.state.session.overviewOrder().slice(0, 3), ['n2', 'n3', 'n1']);
 });
@@ -628,4 +628,28 @@ test('versionsnumret visas längst ner och följer package.json och taggen', asy
   const { dom } = setup();
   const el = dom.window.document.querySelector('.app-version');
   assert.equal(el.textContent, `Version ${VERSION}`);
+});
+
+test('fil med 26 lappar avvisas med tydligt meddelande och inget ändras (KR-31, OQ-72)', async () => {
+  const a = setup();
+  const o = JSON.parse(serializeFile(boardFile(25)));
+  o.lappar.push({ id: 26, t: 'Lapp 26' });
+  await pickFile(a, { text: JSON.stringify(o) });
+  assert.match(a.$('.error').textContent, /Filen har fler än 25 lappar/);
+  assert.equal(a.$('.notice'), null, 'ingen inläsning har skett');
+  // 25 lappar går fortfarande
+  await pickFile(a, { text: serializeFile(boardFile(25)) });
+  assert.match(a.$('.notice').textContent, /inläst med 25 lappar/);
+});
+
+test('sparat arbete med fler än 25 lappar (version 1.0.x) ger ett uttryckligt besked (OQ-72)', () => {
+  const backend = memoryBackend();
+  const s = new Session({ boardName: 'Gammal', ownerName: 'J', seed: 1 });
+  const snap = s.snapshot();
+  snap.notes = Array.from({ length: 27 }, (_, i) => ({ id: `n${i + 1}`, title: `L${i + 1}`, description: '', category: '', color: '' }));
+  snap.nextNoteId = 28;
+  backend.data.set(STORAGE_KEY, JSON.stringify(snap));
+  const a = setup({ backend });
+  assert.match(a.$('.warning').textContent, /fler än 25 lappar/);
+  assert.equal(backend.data.has(STORAGE_KEY), false);
 });
