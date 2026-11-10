@@ -14,6 +14,7 @@ const record = (id, status, text, data = {}) => { results.push({ id, status, tex
 const counts = async () => (await fetch(`${BASE}/api/_counts`)).json();
 const T0 = Date.now();
 const SYNC = 10_000;
+const ROUND_DELAY = Number(process.env.ROUND_DELAY_MS ?? 0); // paus mellan omgångar i M10′ (0 = så fort som möjligt, långt över verklig last)
 
 async function join(code, name, ip) {
   const r = await call('/api/join', { code, name }, { ip: ip ?? freshIp() });
@@ -138,6 +139,8 @@ async function m10() {
   };
   const counter = people.map(() => 0);
   let writeCalls = 0;
+  const kinds = new Map(); // felfördelning: status + felkod + detalj
+  const tally = (r, what) => { const k = `${what} ${r.status} ${r.json?.error ?? r.text.slice(0, 60)} ${r.json?.detail ?? ''}`.trim(); kinds.set(k, (kinds.get(k) ?? 0) + 1); };
   const answered_of = (p) => counter[p];
   const t0 = performance.now();
   while (counter.some((c) => c < order.length)) {
@@ -149,12 +152,22 @@ async function m10() {
       const body = { ...cred(pp), rev: round, answers: encodeVector(cur[p]), ...(finished ? { done: true } : {}) };
       const w = await call('/api/sync', body, { now: now + p });
       calls++; writeCalls++; lat.write.push(w.ms); maxBytes = Math.max(maxBytes, w.bytes, JSON.stringify(body).length);
-      if (w.status !== 200 && w.status !== 409) errors++;
-      if (w.status === 409 && w.json.error !== 'already_done' && !(w.retried && w.json.error === 'stale_rev')) errors++; // stale_rev efter omförsök = första försöket hann fram
+      if (w.status !== 200 && w.status !== 409) { errors++; tally(w, 'skriv'); }
+      if (w.status === 409 && w.json.error !== 'already_done' && !(w.retried && w.json.error === 'stale_rev')) { errors++; tally(w, 'skriv'); } // stale_rev efter omförsök = första försöket hann fram
       // polling från en annan deltagare i samma takt
       const r = await call('/api/sync', cred(pp), { now: now + p });
-      calls++; lat.read.push(r.ms); if (r.status !== 200) errors++;
+      calls++; lat.read.push(r.ms); if (r.status !== 200) { errors++; tally(r, 'läs'); }
     }));
+    if (ROUND_DELAY) await sleep(ROUND_DELAY);
+  }
+  // Klar måste vara bekräftad för alla innan avslut (klienten skulle ha provat igen vid nästa synk)
+  for (let attempt = 0; attempt < 5; attempt++) {
+    now += SYNC; let pending = 0;
+    await Promise.all(people.map(async (pp, p) => {
+      const w = await call('/api/sync', { ...cred(pp), rev: round + attempt + 1, answers: encodeVector(cur[p]), done: true }, { now: now + p });
+      if (w.status !== 200 && !(w.status === 409 && w.json.error === 'already_done')) pending++;
+    }));
+    if (!pending) break;
   }
   const wallMs = performance.now() - t0;
   const mid = await stats();
@@ -181,7 +194,7 @@ async function m10() {
   // ADR-003: ett anrop per synk (skrivning och status i samma anrop). Mätningen körde dessutom en separat läsning per synk, så anropen delas upp.
   const reqPerPass = writeCalls + 1 + P + 1;
   record("M10′", errors === 0 && w.p95 <= 2000 ? 'OK' : 'AVVIKER',
-    `${P} klienter × ${order.length} svar (virtuell tid, synk var 10 s, polling i samma takt): ${calls} anrop utan fel (${errors} fel; ${netErrors.count} nätverksavbrott i klienten provades om); skrivning p50 ${fmt(w.p50)} ms, p95 ${fmt(w.p95)} ms, max ${fmt(w.max)} ms; läsning p95 ${fmt(r.p95)} ms; tidsåtgång ${fmt(wallMs / 1000)} s verklig tid. Verklig tid över 10 min: se M10b.`, { w, r });
+    `${P} klienter × ${order.length} svar (virtuell tid, synk var 10 s, polling i samma takt): ${calls} anrop utan fel (${errors} fel${kinds.size ? ': ' + [...kinds].map(([k, n]) => `${n} × ${k}`).join('; ') : ''}; ${netErrors.count} nätverksavbrott i klienten provades om; paus mellan omgångar ${ROUND_DELAY} ms); skrivning p50 ${fmt(w.p50)} ms, p95 ${fmt(w.p95)} ms, max ${fmt(w.max)} ms; läsning p95 ${fmt(r.p95)} ms; tidsåtgång ${fmt(wallMs / 1000)} s verklig tid. Verklig tid över 10 min: se M10b.`, { w, r });
   // Förbrukning
   const sumRows = (after.rowsRead - mid.rowsRead);
   record('M5/M15', 'DELVIS', `Ett fullt pass (${P} × ${N} lappar, ${order.length} jämförelser, 7 s per jämförelse, synk var 10 s): ${writeCalls} skrivande synkar + ${calls - writeCalls} extra läsningar i mätningen (ADR-modellen har ett anrop per synk, alltså ca ${reqPerPass} anrop per pass; Worker-gratis 100 000 anrop/dygn ⇒ ca ${Math.floor(100000 / reqPerPass)} pass). D1 under hela mätningen: ${rowsW + (after.rowsWritten - mid.rowsWritten)} rader skrivna och ${rowsR + sumRows} lästa, inklusive de extra läsningarna (gratis 100 000 skrivna / 5 000 000 lästa per dygn ⇒ ca ${Math.floor(100000 / (rowsW + 100))} pass på skrivgränsen, högst ${Math.floor(5_000_000 / (rowsR + sumRows))} på läsgränsen, som är för pessimistisk eftersom läsningarna är dubblerade). Största anrop ${maxBytes} byte. Raderna är lokalt D1:s egen räkning och ska jämföras med Cloudflares användningsvy (kräver konto, ej gjort).`, { rowsW, rowsR, reqPerPass });
