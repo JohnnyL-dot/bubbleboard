@@ -67,8 +67,12 @@ function reply(status, body) {
 
 // ---------- spärrar (NFR-6, Förslag OQ-64) ----------
 async function guardFailures(store, ip, now, cfg) {
-  const bucket = `f:${ip}:${Math.floor(now / MINUTE)}`;
-  if ((await store.peek(bucket, now)) >= cfg.failuresPerMinute) throw new ApiError(429, 'too_many_attempts');
+  // Glidande fönster: innevarande och föregående minut räknas ihop, så att 10 + 10 misslyckade försök
+  // runt en minutgräns inte släpps igenom (hittades i mätning på Cloudflare, M7).
+  const minute = Math.floor(now / MINUTE);
+  const bucket = `f:${ip}:${minute}`;
+  const used = (await store.peek(bucket, now)) + (await store.peek(`f:${ip}:${minute - 1}`, now));
+  if (used >= cfg.failuresPerMinute) throw new ApiError(429, 'too_many_attempts');
   return bucket;
 }
 async function fail(store, bucket, now, err) {

@@ -221,3 +221,16 @@ test('aktivitetsstämpeln skrivs högst var 5:e minut men förlänger sessionen'
   await h.call('/api/sync', { ...cred(s), rev: 2, answers: v(2) });
   assert.ok(h.store._dump().sessions[0].last_activity > t0);
 });
+
+test('spärren gäller även över en minutgräns (glidande fönster, M7)', async () => {
+  const h = make();
+  const s = await create(h);
+  const ip = { headers: { 'x-test-ip': '3.3.3.3' } };
+  h.clock.advance(60_000 - (h.clock.now() % 60_000) - 1000); // 1 s före nästa minut
+  for (let i = 0; i < 5; i++) await h.call('/api/lookup', { code: 'AAAAAAAA' }, ip);
+  h.clock.advance(2000); // ny minut
+  const codes = [];
+  for (let i = 0; i < 6; i++) codes.push((await h.call('/api/lookup', { code: 'AAAAAAAA' }, ip)).status);
+  assert.deepEqual(codes, [404, 404, 404, 404, 404, 429]);
+  assert.equal((await h.call('/api/lookup', { code: s.code }, ip)).status, 429);
+});

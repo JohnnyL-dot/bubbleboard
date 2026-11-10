@@ -5,17 +5,30 @@ import { emptyVector, encodeVector, pairIndex, LOW_WON, HIGH_WON, EQUAL } from '
 export const BASE = process.env.BASE ?? 'http://localhost:8787';
 export const ORIGIN = process.env.ORIGIN ?? 'http://localhost:8787';
 
+export const netErrors = { count: 0 };
+
 export async function call(path, body, { ip, now, origin = ORIGIN } = {}) {
   const headers = { origin, 'content-type': 'application/json' };
   if (ip) headers['x-test-ip'] = ip;
   if (now) headers['x-test-now'] = String(now);
   const t0 = performance.now();
-  const res = await fetch(BASE + path, { method: 'POST', headers, body: JSON.stringify(body) });
-  const text = await res.text();
+  // Nätverksfel (anslutning bruten) provas om upp till 3 gånger och räknas i `retried`, så att de syns i rapporten.
+  let res; let text; let retried = 0;
+  for (;;) {
+    try {
+      res = await fetch(BASE + path, { method: 'POST', headers, body: JSON.stringify(body) });
+      text = await res.text();
+      break;
+    } catch (err) {
+      if (retried >= 3) throw err;
+      retried++; netErrors.count++;
+      await new Promise((r) => setTimeout(r, 500 * retried));
+    }
+  }
   const ms = performance.now() - t0;
   let json = null;
   try { json = JSON.parse(text); } catch { /* ok */ }
-  return { status: res.status, json, ms, text, bytes: text.length };
+  return { status: res.status, json, ms, text, bytes: text.length, retried };
 }
 
 export async function stats() {

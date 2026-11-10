@@ -1,59 +1,11 @@
 {
-  "at": "2026-11-10T18:08:19.408Z",
+  "at": "2026-11-10T20:19:40.983Z",
   "results": [
     {
-      "id": "M9",
-      "status": "OK (med tidsstyrning)",
-      "text": "23 h efter skapande finns sessionen (skrivning förlänger), 24 h efter senaste skrivning är den oåtkomlig trots polling i mellantiden (polling räknas inte): 404; cron-rensning tog bort 1 utgången session (via /cdn-cgi/handler/scheduled); avslutad session nåbar efter 20 h (200), borta efter 26 h (404). Tiden är styrd med testrubrik, inte väntad. Taket 72 h (Förslag OQ-67) är av som standard och ej provat.",
+      "id": "M7",
+      "status": "FEL",
+      "text": "Error: create 500 {\"error\":\"server_error\"} |     at createSession (file:///home/claude/bubbleboard/prototype-group/measure/lib.mjs:45:31) |     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
       "data": {}
-    },
-    {
-      "id": "M11",
-      "status": "OK",
-      "text": "20 deltagare × 435 jämförelser: poäng per lapp stämmer med oberoende räkning (true), summan 8700 = 8700, ordning sjunkande (true), ej preliminär.",
-      "data": {}
-    },
-    {
-      "id": "M10′",
-      "status": "OK",
-      "text": "20 klienter × 435 svar (virtuell tid, synk var 10 s, polling i samma takt): 12160 anrop utan fel (0 fel); skrivning p50 108.6 ms, p95 162.1 ms, max 320.8 ms; läsning p95 125.7 ms; tidsåtgång 62 s verklig tid. Verklig tid över 10 min: se M10b.",
-      "data": {
-        "w": {
-          "n": 6080,
-          "p50": 108.61623200000031,
-          "p95": 162.0658799999983,
-          "max": 320.7676360000005
-        },
-        "r": {
-          "n": 6080,
-          "p50": 76.76566900000034,
-          "p95": 125.71255700000074,
-          "max": 316.30863599999975
-        }
-      }
-    },
-    {
-      "id": "M5/M15",
-      "status": "DELVIS",
-      "text": "Ett fullt pass (20 × 30 lappar, 435 jämförelser, 7 s per jämförelse, synk var 10 s): 6080 skrivande synkar + 6080 extra läsningar i mätningen (ADR-modellen har ett anrop per synk, alltså ca 6102 anrop per pass; Worker-gratis 100 000 anrop/dygn ⇒ ca 16 pass). D1 under hela mätningen: 6132 rader skrivna och 285837 lästa, inklusive de extra läsningarna (gratis 100 000 skrivna / 5 000 000 lästa per dygn ⇒ ca 16 pass på skrivgränsen, högst 17 på läsgränsen, som är för pessimistisk eftersom läsningarna är dubblerade). Största anrop 4006 byte. Raderna är lokalt D1:s egen räkning och ska jämföras med Cloudflares användningsvy (kräver konto, ej gjort).",
-      "data": {
-        "rowsW": 6110,
-        "rowsR": 285790,
-        "reqPerPass": 6102
-      }
-    },
-    {
-      "id": "M5 (CPU)",
-      "status": "OK (Node, ej workerd)",
-      "text": "Summering av 20 × 435 jämförelser i Node: p50 1.1 ms, p95 5.3 ms, max 7 ms (gratisgräns 10 ms CPU per anrop). workerd räknar inte CPU-tid lokalt och dess timers står stilla utan I/O, så siffran gäller Node och måste kompletteras med Cloudflares egen CPU-mätning.",
-      "data": {
-        "C": {
-          "n": 50,
-          "p50": 1.0501420000073267,
-          "p95": 5.3137989999959245,
-          "max": 6.976120999999694
-        }
-      }
     }
   ]
 }

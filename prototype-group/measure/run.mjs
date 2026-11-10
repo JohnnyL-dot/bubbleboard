@@ -4,7 +4,7 @@ import { performance } from 'node:perf_hooks';
 import { writeFileSync } from 'node:fs';
 import {
   BASE, call, cred, createSession, notes, freshIp, rng, allPairs, randomValues, emptyVector, encodeVector, pairIndex,
-  summary, fmt, sleep, stats,
+  summary, fmt, sleep, stats, netErrors,
 } from './lib.mjs';
 import { computeResult } from '../src/session-core.js';
 import { LOW_WON, HIGH_WON, EQUAL, decodeVector } from '../../src/engine/vector.js';
@@ -150,7 +150,7 @@ async function m10() {
       const w = await call('/api/sync', body, { now: now + p });
       calls++; writeCalls++; lat.write.push(w.ms); maxBytes = Math.max(maxBytes, w.bytes, JSON.stringify(body).length);
       if (w.status !== 200 && w.status !== 409) errors++;
-      if (w.status === 409 && w.json.error !== 'already_done') errors++;
+      if (w.status === 409 && w.json.error !== 'already_done' && !(w.retried && w.json.error === 'stale_rev')) errors++; // stale_rev efter omförsök = första försöket hann fram
       // polling från en annan deltagare i samma takt
       const r = await call('/api/sync', cred(pp), { now: now + p });
       calls++; lat.read.push(r.ms); if (r.status !== 200) errors++;
@@ -180,7 +180,7 @@ async function m10() {
   // ADR-003: ett anrop per synk (skrivning och status i samma anrop). Mätningen körde dessutom en separat läsning per synk, så anropen delas upp.
   const reqPerPass = writeCalls + 1 + P + 1;
   record("M10′", errors === 0 && w.p95 <= 2000 ? 'OK' : 'AVVIKER',
-    `${P} klienter × ${order.length} svar (virtuell tid, synk var 10 s, polling i samma takt): ${calls} anrop utan fel (${errors} fel); skrivning p50 ${fmt(w.p50)} ms, p95 ${fmt(w.p95)} ms, max ${fmt(w.max)} ms; läsning p95 ${fmt(r.p95)} ms; tidsåtgång ${fmt(wallMs / 1000)} s verklig tid. Verklig tid över 10 min: se M10b.`, { w, r });
+    `${P} klienter × ${order.length} svar (virtuell tid, synk var 10 s, polling i samma takt): ${calls} anrop utan fel (${errors} fel; ${netErrors.count} nätverksavbrott i klienten provades om); skrivning p50 ${fmt(w.p50)} ms, p95 ${fmt(w.p95)} ms, max ${fmt(w.max)} ms; läsning p95 ${fmt(r.p95)} ms; tidsåtgång ${fmt(wallMs / 1000)} s verklig tid. Verklig tid över 10 min: se M10b.`, { w, r });
   // Förbrukning
   const sumRows = (after.rowsRead - mid.rowsRead);
   record('M5/M15', 'DELVIS', `Ett fullt pass (${P} × ${N} lappar, ${order.length} jämförelser, 7 s per jämförelse, synk var 10 s): ${writeCalls} skrivande synkar + ${calls - writeCalls} extra läsningar i mätningen (ADR-modellen har ett anrop per synk, alltså ca ${reqPerPass} anrop per pass; Worker-gratis 100 000 anrop/dygn ⇒ ca ${Math.floor(100000 / reqPerPass)} pass). D1 under hela mätningen: ${rowsW + (after.rowsWritten - mid.rowsWritten)} rader skrivna och ${rowsR + sumRows} lästa, inklusive de extra läsningarna (gratis 100 000 skrivna / 5 000 000 lästa per dygn ⇒ ca ${Math.floor(100000 / (rowsW + 100))} pass på skrivgränsen, högst ${Math.floor(5_000_000 / (rowsR + sumRows))} på läsgränsen, som är för pessimistisk eftersom läsningarna är dubblerade). Största anrop ${maxBytes} byte. Raderna är lokalt D1:s egen räkning och ska jämföras med Cloudflares användningsvy (kräver konto, ej gjort).`, { rowsW, rowsR, reqPerPass });
