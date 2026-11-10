@@ -1,7 +1,8 @@
-// Tre lastscenarier i verklig tid: 10 personer som sorterar 20 lappar (190 jämförelser) samtidigt.
-//   normal : ca 7 s per jämförelse (ADR-003 avsnitt 8), ca 22 min
-//   peak   : alla klickar supersnabbt, 2 s per jämförelse, ca 6,5 min
-//   double : dubbel peak = två sessioner à 10 personer samtidigt (20 klienter, peak-takt), ca 6,5 min
+// Lastscenarier i verklig tid: 10 personer som sorterar 20 lappar (190 jämförelser) i en session.
+//   normal : X = ca 7 s per jämförelse (ADR-003 avsnitt 8), ca 22 min
+//   peak   : 2X, ca 3,5 s per jämförelse, ca 11 min
+//   double : 4X, ca 1,75 s per jämförelse, ca 5,5 min
+//   (hardpeak och twosessions: tidigare, hårdare test)
 // Varje klient har egen takt (±jitter) och egen synkfas, synkar var 10 s (endast skrivning vid ändring, annars läsning),
 // lämnar in direkt efter sista jämförelsen och väntar på att ägaren avslutar. Ingen testrubrik för tid används.
 // Kör: node measure/scenarios.mjs normal|peak|double|all   (BASE och ORIGIN som vanligt)
@@ -14,10 +15,15 @@ const SCALE = Number(process.env.TIME_SCALE ?? 1);
 const SYNC_MS = 10_000 * SCALE;
 const WRITE_GAP_MS = 4_100 * SCALE;       // servern tillåter en skrivning per 4 s och deltagare
 const N = 20; const PEOPLE = 10;
+// Lastprofiler enligt Johnny 2026-11-10: normal last = X, peak = 2X, dubbel peak = 4X. Alltid EN session med 10 personer och 20 lappar.
+// X = 7 s per jämförelse (ADR-003 avsnitt 8). 2X = 3,5 s och 4X = 1,75 s per jämförelse.
+// `hardpeak` (2 s) och `twosessions` är de hårdare testerna som kördes tidigare, kvar för jämförelse.
 const SCENARIOS = {
-  normal: { label: 'Normal last (7 s per jämförelse)', sessions: 1, answerMs: 7000, jitter: 0.4 },
-  peak: { label: 'Peaklast (2 s per jämförelse, supersnabba)', sessions: 1, answerMs: 2000, jitter: 0.3 },
-  double: { label: 'Dubbel peak (två sessioner à 10 personer, 2 s per jämförelse)', sessions: 2, answerMs: 2000, jitter: 0.3 },
+  normal: { label: 'Normal last X (7 s per jämförelse)', sessions: 1, answerMs: 7000, jitter: 0.4 },
+  peak: { label: 'Peaklast 2X (3,5 s per jämförelse)', sessions: 1, answerMs: 3500, jitter: 0.3 },
+  double: { label: 'Dubbel peak 4X (1,75 s per jämförelse)', sessions: 1, answerMs: 1750, jitter: 0.3 },
+  hardpeak: { label: 'Hård peak (2 s per jämförelse, ca 3,5X)', sessions: 1, answerMs: 2000, jitter: 0.3 },
+  twosessions: { label: 'Två sessioner à 10 samtidigt, 2 s per jämförelse (ca 7X)', sessions: 2, answerMs: 2000, jitter: 0.3 },
 };
 
 function fullValues(seed) {
@@ -125,7 +131,7 @@ async function runScenario(name) {
 }
 
 const arg = process.argv[2] ?? 'all';
-const names = arg === 'all' ? Object.keys(SCENARIOS) : [arg];
+const names = arg === 'all' ? ['normal', 'peak', 'double'] : [arg];
 const out = [];
 for (const n of names) {
   if (!SCENARIOS[n]) { console.log('okänt scenario', n); continue; }
