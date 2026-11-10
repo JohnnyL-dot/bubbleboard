@@ -1,6 +1,6 @@
 {
   "name": "bubbleboard",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "Collaborative Prioritization Board (MVP)",
