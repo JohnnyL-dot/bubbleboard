@@ -75,7 +75,8 @@ test('startsidan är på svenska, gruppsession är avstängd med förklaring', (
   const { root, $ } = setup();
   assert.match(root.textContent, /Prioriteringsboard/);
   assert.equal($('button[disabled]').textContent, 'Gruppsession');
-  assert.match(root.textContent, /OQ-51/);
+  assert.match(root.textContent, /Gruppsession är inte tillgänglig/);
+  assert.doesNotMatch(root.textContent, /OQ-/);
 });
 
 test('board utan namn ger begripligt felmeddelande (KR-29)', () => {

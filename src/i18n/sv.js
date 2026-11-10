@@ -10,7 +10,7 @@ export const sv = {
   'start.alias': 'Ditt namn eller alias',
   'start.individual': 'Prioritera själv',
   'start.group': 'Gruppsession',
-  'start.groupSoon': 'Gruppsession är inte tillgänglig ännu. Den väntar på att realtidslösningen väljs (OQ-51).',
+  'start.groupSoon': 'Gruppsession är inte tillgänglig ännu.',
 
   'mode.prepared': 'Förberedd',
   'mode.running': 'Pågår',

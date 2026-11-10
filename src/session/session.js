@@ -4,7 +4,7 @@
 // Individuellt läge följer samma flöde som en gruppdeltagares sortering (OQ-59, OQ-60):
 // alla par besvaras ett i taget, "Ångra senaste" tar bort senaste svaret, och
 // summeringen av en enda deltagare är deltagarens egen rangordning.
-// Gruppsession mot server är inte byggd (KR-13, OQ-51).
+// Gruppsession mot server är inte byggd (KR-13, OQ-51: mätprototyp på grenen prototype-group).
 //
 // Fel kastas som SessionError med en kod som gränssnittet översätter (NFR-11).
 
