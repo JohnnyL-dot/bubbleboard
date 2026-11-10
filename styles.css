@@ -65,7 +65,6 @@ input, select, textarea {
 .progress { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
 .progress progress { flex: 1; height: 14px; }
 .question { margin: 8px 0 0; }
-.paused { background: #e8eefc; padding: 10px; border-radius: 8px; }
 .rank-row { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: start; background: var(--card); border: 2px solid var(--line); border-left-width: 10px; border-radius: 8px; padding: 10px; margin: 8px 0; }
 .place { font-weight: 800; font-size: 1.2rem; min-width: 3.2ch; }
 .pts { grid-column: 2; color: var(--muted); }
@@ -80,3 +79,18 @@ input, select, textarea {
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: grid; place-items: center; padding: 16px; }
 .dialog { background: #fff; border-radius: 12px; padding: 16px; max-width: 420px; width: 100%; }
 .notice { color: var(--muted); margin: 8px 0; }
+
+/* Översikt och manuell ordning (KR-5, KR-26) */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.note-head { display: flex; gap: 10px; align-items: flex-start; }
+.note-main { flex: 1; min-width: 0; }
+.num { font-weight: 800; min-width: 2ch; color: var(--muted); }
+.note > .move, .note > .row { margin-top: 6px; }
+.note .move { display: flex; gap: 6px; }
+.sortable > li { position: relative; }
+.handle { touch-action: none; cursor: grab; min-width: 44px; user-select: none; -webkit-user-select: none; }
+.dragging { z-index: 5; box-shadow: 0 6px 18px rgba(0,0,0,.35); opacity: .95; pointer-events: none; }
+.drop-before { box-shadow: 0 -4px 0 0 #2563eb; }
+.drop-after { box-shadow: 0 4px 0 0 #2563eb; }
+.rank-row.manual .move { grid-column: 2; }
+.file-load input { display: block; margin-top: 4px; max-width: 100%; }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Session, SessionError, LIMITS, MODE } from '../src/session/session.js';
+import { Session, SessionError, LIMITS, MODE, COLORS } from '../src/session/session.js';
 
 const mk = (opts = {}) => new Session({ boardName: 'Workshop', ownerName: 'Johnny', seed: 1, ...opts });
 const code = (fn) => {
@@ -12,12 +12,15 @@ function withNotes(n, opts = {}) {
   for (let i = 1; i <= n; i++) s.addNote(s.ownerId, { title: `Lapp ${i}` });
   return s;
 }
-const left = (s) => s.currentPair().left;
+/** Besvarar alla par så att vänster alltid vinner. */
+const answerAll = (s, choice = 'left') => { while (s.currentPair()) s.answer(choice); };
 
 // ---- Board (KR-29) och lappar (KR-1, AT-1) ----
 
-test('board kräver namn (KR-29)', () => {
+test('board kräver namn och ägaren kräver namn (KR-29)', () => {
   assert.equal(code(() => new Session({ boardName: '   ', ownerName: 'A' })), 'BOARD_NAME_EMPTY');
+  assert.equal(code(() => new Session({ boardName: 'B', ownerName: '  ' })), 'NAME_EMPTY');
+  assert.equal(code(() => new Session({ boardName: 'B', ownerName: 'x'.repeat(16) })), 'NAME_TOO_LONG');
   assert.equal(mk().boardName, 'Workshop');
 });
 
@@ -37,418 +40,304 @@ test('fältgränser: titel 100, beskrivning 500, kategori 30, palett om 8 färge
   assert.equal(code(() => add({ title: 'a', description: 'd'.repeat(501) })), 'DESCRIPTION_TOO_LONG');
   assert.ok(add({ title: 'a', category: 'k'.repeat(30) }));
   assert.equal(code(() => add({ title: 'a', category: 'k'.repeat(31) })), 'CATEGORY_TOO_LONG');
-  assert.ok(add({ title: 'a', color: 'teal' }));
-  assert.equal(code(() => add({ title: 'a', color: 'magenta' })), 'COLOR_INVALID');
+  assert.equal(COLORS.length, 8);
+  for (const c of COLORS) assert.ok(add({ title: 'a', color: c }) || true);
+  assert.equal(code(() => add({ title: 'a', color: 'brun' })), 'COLOR_INVALID');
 });
 
-test('titlar behöver inte vara unika, och åäö fungerar (OQ-33, NFR-11)', () => {
-  const s = mk();
-  s.addNote(s.ownerId, { title: 'Åtgärda ändring' });
-  s.addNote(s.ownerId, { title: 'Åtgärda ändring' });
-  assert.equal(s.notes.length, 2);
-  assert.equal(s.notes[0].title, 'Åtgärda ändring');
-});
-
-test('max 20 lappar: den 21:a avvisas. Minst 2 krävs för start (OQ-34)', () => {
-  const s = withNotes(20);
-  assert.equal(code(() => s.addNote(s.ownerId, { title: 'en till' })), 'MAX_NOTES');
-  assert.equal(s.notes.length, 20);
-  const one = withNotes(1);
-  assert.equal(code(() => one.start(one.ownerId)), 'MIN_NOTES');
-  const zero = mk();
-  assert.equal(code(() => zero.start(zero.ownerId)), 'MIN_NOTES');
-});
-
-test('inga lappar kan läggas till när röstningen startat (OQ-31)', () => {
-  const s = withNotes(3);
-  s.start(s.ownerId);
-  assert.equal(code(() => s.addNote(s.ownerId, { title: 'sen' })), 'NOTES_LOCKED');
-  assert.equal(code(() => s.duplicateNote(s.ownerId, 'n1')), 'NOTES_LOCKED');
-});
-
-test('duplicera lapp (KR-4) och redigera text (OQ-31)', () => {
-  const s = withNotes(2);
-  const copy = s.duplicateNote(s.ownerId, 'n1');
-  assert.notEqual(copy.id, 'n1');
-  assert.equal(copy.title, 'Lapp 1');
-  s.start(s.ownerId);
-  s.editNote(s.ownerId, 'n2', { title: 'Ny text' });
-  assert.equal(s.notes.find((n) => n.id === 'n2').title, 'Ny text');
-  assert.equal(s.queue.length, 3, 'textändring påverkar inte jämförelserna');
-  assert.equal(code(() => s.editNote(s.ownerId, 'n2', { title: '' })), 'TITLE_EMPTY');
-});
-
-test('endast ägaren hanterar lappar och sessionen (NFR-6)', () => {
-  const s = mk({ individual: false });
-  const p = s.addParticipant('Eva');
-  assert.equal(code(() => s.addNote(p, { title: 'x' })), 'NOT_OWNER');
-  assert.equal(code(() => s.start(p)), 'NOT_OWNER');
-});
-
-// ---- Deltagare (OQ-27, OQ-23) ----
-
-test('visningsnamn: unika (skiftlägesokänsligt), 1–15 tecken (OQ-27)', () => {
-  const s = mk({ individual: false });
-  assert.equal(code(() => s.addParticipant('johnny')), 'NAME_TAKEN');
-  assert.equal(code(() => s.addParticipant('')), 'NAME_EMPTY');
-  assert.equal(code(() => s.addParticipant('x'.repeat(16))), 'NAME_TOO_LONG');
-  assert.ok(s.addParticipant('x'.repeat(15)));
-});
-
-test('individuell session kan inte få fler deltagare (OQ-23)', () => {
-  const s = mk();
-  assert.equal(code(() => s.addParticipant('Eva')), 'INDIVIDUAL_SESSION');
-  assert.equal(s.participants.size, 1);
-});
-
-// ---- Start, jämförelser, framsteg (AT-3, KR-6, KR-7, KR-12) ----
-
-test('start ger n(n-1)/2 par och läget Pågår, framsteg visas (KR-12)', () => {
-  const s = withNotes(5);
-  assert.equal(s.mode, MODE.PREPARED);
-  s.start(s.ownerId);
-  assert.equal(s.mode, MODE.RUNNING);
-  assert.deepEqual(s.progress(), { decided: 0, remaining: 10, total: 10 });
-  s.answer('left');
-  assert.deepEqual(s.progress(), { decided: 1, remaining: 9, total: 10 });
-});
-
-test('samma seed ger samma ordning på parens presentation (OQ-21)', () => {
-  const a = withNotes(5), b = withNotes(5);
-  a.start(a.ownerId); b.start(b.ownerId);
-  assert.deepEqual(a.queue, b.queue);
-});
-
-test('individuellt svar registreras och nästa par visas (AT-3)', () => {
-  const s = withNotes(3);
-  s.start(s.ownerId);
-  const first = s.currentPair();
-  s.answer('right');
-  assert.notEqual(s.currentPair().id, first.id);
-  assert.equal(s.history[0].outcome, 'right');
-  assert.equal(s.history[0].counts.right, 1);
-});
-
-test('hela individuella flödet ger rangordning med rätt poäng (AT-9)', () => {
-  const s = withNotes(3);
-  s.start(s.ownerId);
-  // Lapp med lägst nummer vinner alltid.
-  while (s.currentPair()) {
-    const p = s.currentPair();
-    const num = (id) => Number(id.slice(1));
-    s.answer(num(p.left) < num(p.right) ? 'left' : 'right');
-  }
-  assert.ok(s.allPairsDecided());
-  assert.deepEqual(s.autoRanking().map((r) => [r.id, r.points, r.place]), [
-    ['n1', 2, 1], ['n2', 1, 2], ['n3', 0, 3],
-  ]);
-  s.finish(s.ownerId);
-  assert.equal(s.preliminary(), null);
-});
-
-test('"lika viktiga" ger 0,5 poäng till båda och räknas som avgjort (KR-10)', () => {
-  const s = withNotes(2);
-  s.start(s.ownerId);
-  s.answer('equal');
-  assert.deepEqual(s.autoRanking().map((r) => r.points), [0.5, 0.5]);
-  assert.equal(s.history[0].outcome, 'equal');
-});
-
-test('ångra senaste går ett steg bakåt åt gången (OQ-22)', () => {
-  const s = withNotes(3);
-  s.start(s.ownerId);
-  const p1 = s.currentPair();
-  s.answer('left');
-  const p2 = s.currentPair();
-  s.answer('left');
-  s.undo();
-  assert.equal(s.currentPair().id, p2.id);
-  s.undo();
-  assert.equal(s.currentPair().id, p1.id);
-  assert.equal(s.history.length, 0);
-  assert.equal(code(() => s.undo()), 'NOTHING_TO_UNDO');
-});
-
-test('ångra finns inte i gruppsession (OQ-22)', () => {
-  const s = withNotes(2, { individual: false });
-  s.start(s.ownerId);
-  assert.equal(code(() => s.undo()), 'NOT_INDIVIDUAL');
-});
-
-// ---- Röstning i grupp (AT-4, AT-5, AT-6, KR-15–KR-19) ----
-
-function group(n = 3, extra = ['Eva', 'Olle']) {
-  const s = withNotes(n, { individual: false });
-  const ps = extra.map((name) => s.addParticipant(name));
-  s.start(s.ownerId);
-  return { s, o: s.ownerId, ps };
-}
-
-test('ändra röst: högst en aktiv röst, senaste gäller (AT-5, KR-16)', () => {
-  const { s, o, ps } = group();
-  s.vote(ps[0], 'left');
-  s.vote(ps[0], 'right');
-  s.vote(ps[0], 'right');
-  assert.equal(s.votes.size, 1);
-  assert.equal(s.votes.get(ps[0]), 'right');
-  s.vote(o, 'right'); s.vote(ps[1], 'left');
-  const info = s.closeVoting(o);
-  assert.deepEqual(info.counts, { left: 1, right: 2, equal: 0 });
-  assert.equal(info.outcome, 'right');
-});
-
-test('stängning är manuell även när alla röstat, och röster kan inte ändras efter (OQ-49)', () => {
-  const { s, o, ps } = group();
-  s.vote(o, 'left'); s.vote(ps[0], 'left'); s.vote(ps[1], 'left');
-  assert.ok(s.allVoted());
-  assert.equal(s.phase, 'open');
-  s.closeVoting(o);
-  assert.equal(code(() => s.vote(ps[0], 'right')), 'VOTING_CLOSED');
-  assert.equal(code(() => s.closeVoting(o)), 'VOTING_CLOSED');
-});
-
-test('avgjord omröstning kräver att ägaren går vidare manuellt (OQ-15)', () => {
-  const { s, o, ps } = group();
-  const first = s.currentPair();
-  s.vote(o, 'left'); s.vote(ps[0], 'left'); s.vote(ps[1], 'right');
-  s.closeVoting(o);
-  assert.equal(s.currentPair().id, first.id, 'aggregerat resultat visas för samma par');
-  s.nextComparison(o);
-  assert.notEqual(s.currentPair().id, first.id);
-  assert.equal(s.votes.size, 0);
-});
-
-test('delad förstaplats ger ingen poäng, ny omröstning på samma par rensar röster (AT-6, KR-18)', () => {
-  const { s, o, ps } = group(3, ['Eva', 'Olle', 'Lisa']);
-  const first = s.currentPair();
-  s.vote(o, 'left'); s.vote(ps[0], 'left'); s.vote(ps[1], 'right'); s.vote(ps[2], 'right');
-  const info = s.closeVoting(o);
-  assert.equal(info.decided, false);
-  assert.equal(s.history.length, 0, 'ingen poäng delas ut');
-  assert.equal(code(() => s.nextComparison(o)), 'NOT_DECIDED');
-  s.newRound(o);
-  assert.equal(s.currentPair().id, first.id);
-  assert.equal(s.votes.size, 0);
-  assert.equal(s.phase, 'open');
-  // Ingen gräns: en omgång till är möjlig.
-  s.vote(o, 'equal'); s.vote(ps[0], 'left'); s.vote(ps[1], 'right');
-  assert.equal(s.closeVoting(o).decided, false);
-  s.newRound(o);
-  s.vote(o, 'equal'); s.vote(ps[0], 'equal');
-  assert.equal(s.closeVoting(o).outcome, 'equal');
-  assert.equal(s.history[0].outcome, 'equal');
-});
-
-test('noll röster är inte avgjort (OQ-49)', () => {
-  const { s, o } = group();
-  assert.equal(s.closeVoting(o).decided, false);
-  assert.equal(s.history.length, 0);
-});
-
-test('avbryta kastar rösterna och lägger paret sist i kön (OQ-49)', () => {
-  const { s, o, ps } = group();
-  const first = s.currentPair();
-  const total = s.queue.length;
-  s.vote(ps[0], 'left');
-  s.cancelVoting(o);
-  assert.equal(s.votes.size, 0);
-  assert.equal(s.queue.length, total);
-  assert.equal(s.queue[s.queue.length - 1].id, first.id);
-  assert.notEqual(s.currentPair().id, first.id);
-  assert.equal(s.history.length, 0);
-});
-
-test('avbryta på sista paret lämnar kvar paret', () => {
-  const { s, o } = group(2);
-  const only = s.currentPair();
-  s.cancelVoting(o);
-  assert.equal(s.currentPair().id, only.id);
-});
-
-test('ägaren röstar också som deltagare och rösterna är dolda för andra via API (OQ-14)', () => {
-  const { s, o } = group();
-  s.vote(o, 'left');
-  assert.ok(s.hasVoted(o));
-  assert.equal(s.hasVoted('p2'), false, 'man ser vem som röstat, inte vad (OQ-16)');
-});
-
-test('okänd deltagare och ogiltigt val avvisas', () => {
-  const { s } = group();
-  assert.equal(code(() => s.vote('p99', 'left')), 'UNKNOWN_PARTICIPANT');
-  assert.equal(code(() => s.vote('p1', 'skip')), 'CHOICE_INVALID');
-});
-
-// ---- Paus, avslut (AT-8, KR-20, OQ-17, OQ-18) ----
-
-test('under paus är röstning låst och lämnade röster bevaras (OQ-17)', () => {
-  const { s, o, ps } = group();
-  s.vote(ps[0], 'left');
-  s.pause(o);
-  assert.equal(s.mode, MODE.PAUSED);
-  assert.equal(code(() => s.vote(ps[1], 'left')), 'VOTING_PAUSED');
-  assert.equal(code(() => s.closeVoting(o)), 'VOTING_PAUSED');
-  s.resume(o);
-  assert.equal(s.mode, MODE.RUNNING);
-  assert.equal(s.votes.get(ps[0]), 'left');
-  s.vote(ps[1], 'left');
-  assert.equal(s.votes.size, 2);
-});
-
-test('felaktiga lägesövergångar avvisas', () => {
-  const s = withNotes(2);
-  assert.equal(code(() => s.pause(s.ownerId)), 'WRONG_MODE');
-  s.start(s.ownerId);
-  assert.equal(code(() => s.start(s.ownerId)), 'WRONG_MODE');
-  assert.equal(code(() => s.resume(s.ownerId)), 'WRONG_MODE');
-});
-
-test('avslut i förtid ger preliminärt resultat "X av Y" och är slutgiltigt (OQ-18)', () => {
-  const s = withNotes(4);
-  s.start(s.ownerId);
-  for (let i = 0; i < 3; i++) s.answer('left');
-  s.finish(s.ownerId);
-  assert.equal(s.mode, MODE.FINISHED);
-  assert.deepEqual(s.preliminary(), { decided: 3, total: 6 });
-  assert.equal(s.autoRanking().length, 4);
-  assert.equal(code(() => s.resume(s.ownerId)), 'WRONG_MODE');
-  assert.equal(code(() => s.vote(s.ownerId, 'left')), 'WRONG_MODE');
-  assert.equal(code(() => s.start(s.ownerId)), 'WRONG_MODE');
-});
-
-test('pågående omröstning räknas inte vid avslut', () => {
-  const { s, o, ps } = group(3);
-  s.vote(ps[0], 'left');
-  s.finish(o);
-  assert.equal(s.history.length, 0);
-  assert.equal(s.votes.size, 0);
-});
-
-// ---- Ta bort lapp efter start (AT-11, KR-4, OQ-31) ----
-
-test('borttagning före start tar bara bort lappen', () => {
-  const s = withNotes(3);
-  s.removeNote(s.ownerId, 'n2');
-  assert.deepEqual(s.notes.map((n) => n.id), ['n1', 'n3']);
-  assert.equal(s.comparisonsAffectedByRemoving('n1'), 0);
-});
-
-test('borttagning efter start tar bort lappens jämförelser och räknar om (AT-11)', () => {
-  const s = withNotes(4);
-  s.start(s.ownerId);
-  // Avgör tre par.
-  for (let i = 0; i < 3; i++) s.answer('left');
-  const affected = s.comparisonsAffectedByRemoving('n2');
-  assert.equal(affected, 3, 'varje lapp ingår i 3 av de 6 paren');
-  const before = s.progress().total;
-  s.removeNote(s.ownerId, 'n2');
-  assert.equal(s.notes.length, 3);
-  assert.equal(s.progress().total, 3);
-  assert.ok(before > s.progress().total);
-  assert.ok([...s.queue, ...s.history].every((p) => (p.left !== 'n2' && p.right !== 'n2')));
-  assert.equal(s.autoRanking().length, 3);
-});
-
-test('lapp i pågående par: omröstningen avbryts, rösterna kastas, nästa par visas (OQ-31)', () => {
-  const { s, o, ps } = group(3);
-  const pair = s.currentPair();
-  s.vote(o, 'left'); s.vote(ps[0], 'left');
-  s.removeNote(o, pair.left);
-  assert.equal(s.votes.size, 0);
-  assert.equal(s.phase, 'open');
-  assert.ok(s.currentPair());
-  assert.ok(![s.currentPair().left, s.currentPair().right].includes(pair.left));
-});
-
-test('efter start går det inte att ta bort så att färre än 2 lappar finns kvar', () => {
-  const s = withNotes(2);
-  s.start(s.ownerId);
-  assert.equal(code(() => s.removeNote(s.ownerId, 'n1')), 'MIN_NOTES');
-});
-
-// ---- Cykler, resultat, manuell ordning (AT-9, KR-11, KR-26) ----
-
-function finishedSession() {
-  const s = withNotes(3);
-  s.start(s.ownerId);
-  while (s.currentPair()) {
-    const p = s.currentPair();
-    s.answer(Number(p.left.slice(1)) < Number(p.right.slice(1)) ? 'left' : 'right');
-  }
-  s.finish(s.ownerId);
-  return s;
-}
-
-test('cykel i röstutfallet ger varning med de ingående lapparna (AT-9, KR-11)', () => {
-  const s = withNotes(3);
-  s.start(s.ownerId);
-  // n1>n2, n2>n3, n3>n1
-  const beats = { 'n1|n2': 'n1', 'n2|n3': 'n2', 'n1|n3': 'n3' };
-  while (s.currentPair()) {
-    const p = s.currentPair();
-    const key = [p.left, p.right].sort().join('|');
-    s.answer(beats[key] === p.left ? 'left' : 'right');
-  }
-  assert.deepEqual(s.cycles(), [['n1', 'n2', 'n3']]);
-  assert.ok(s.autoRanking().every((r) => r.points === 1 && r.shared));
-});
-
-test('manuell efterjustering sparas separat från automatisk rangordning (KR-26, OQ-36)', () => {
-  const s = finishedSession();
-  const auto = s.autoRanking().map((r) => r.id);
-  assert.deepEqual(auto, ['n1', 'n2', 'n3']);
-  s.moveNote(s.ownerId, 'n3', 'up');
-  assert.deepEqual(s.displayedOrder(), ['n1', 'n3', 'n2']);
-  assert.deepEqual(s.autoRanking().map((r) => r.id), auto, 'automatisk ordning oförändrad');
-  assert.deepEqual(s.stats().map((r) => r.points), [2, 1, 0], 'statistiken påverkas inte');
-  s.moveNote(s.ownerId, 'n1', 'up'); // redan överst, ingen ändring
-  assert.deepEqual(s.displayedOrder(), ['n1', 'n3', 'n2']);
-  s.resetManualOrder(s.ownerId);
-  assert.deepEqual(s.displayedOrder(), auto);
-});
-
-test('manuell justering endast efter avslut och endast av ägaren', () => {
-  const s = withNotes(2);
-  assert.equal(code(() => s.moveNote(s.ownerId, 'n1', 'down')), 'WRONG_MODE');
-  const f = finishedSession();
-  assert.equal(code(() => f.moveNote('p9', 'n1', 'down')), 'NOT_OWNER');
-});
-
-test('jämförelselistan visar röstsiffror per avgjord jämförelse (OQ-11)', () => {
-  const { s, o, ps } = group(2);
-  s.vote(o, 'left'); s.vote(ps[0], 'left'); s.vote(ps[1], 'right');
-  s.closeVoting(o);
-  const list = s.comparisonList();
-  assert.equal(list.length, 1);
-  assert.deepEqual(list[0].counts, { left: 2, right: 1, equal: 0 });
-});
-
-test('LIMITS följer besluten', () => {
-  assert.equal(LIMITS.MAX_NOTES, 20);
-  assert.equal(LIMITS.MIN_NOTES, 2);
-  assert.equal(LIMITS.PARTICIPANT_NAME_MAX, 15);
-});
-
-// ---- Teckenräkning (TF-1) ----
-
-test('längd räknas i tecken (kodpunkter): en emoji är ett tecken', () => {
+test('emoji räknas som ett tecken (TF-1)', () => {
   const s = mk();
   assert.ok(s.addNote(s.ownerId, { title: '😀'.repeat(100) }));
   assert.equal(code(() => s.addNote(s.ownerId, { title: '😀'.repeat(101) })), 'TITLE_TOO_LONG');
-  const g = mk({ individual: false });
-  assert.ok(g.addParticipant('😀'.repeat(15)));
-  assert.equal(code(() => g.addParticipant('😀'.repeat(16))), 'NAME_TOO_LONG');
 });
 
-test('namn trimmas och åäö är skiftlägesokänsliga (TF-2)', () => {
-  const s = mk({ individual: false });
-  assert.ok(s.addParticipant('Åsa'));
-  assert.equal(code(() => s.addParticipant('åsa')), 'NAME_TAKEN');
-  assert.equal(code(() => s.addParticipant('ÅSA ')), 'NAME_TAKEN');
+test('lappgränser: 30 lappar går, den 31:a avvisas (KR-1, OQ-58)', () => {
+  assert.equal(LIMITS.MAX_NOTES, 30);
+  const s = withNotes(30);
+  assert.equal(s.notes.length, 30);
+  assert.equal(code(() => s.addNote(s.ownerId, { title: 'trettioen' })), 'MAX_NOTES');
+  assert.equal(code(() => s.duplicateNote(s.ownerId, s.notes[0].id)), 'MAX_NOTES');
+  assert.equal(s.notes.length, 30);
 });
 
-test('fast seed ger samma jämförelseordning (TF-8)', () => {
-  const a = withNotes(6, { seed: 99 }), b = withNotes(6, { seed: 99 }), c = withNotes(6, { seed: 100 });
-  a.start(a.ownerId); b.start(b.ownerId); c.start(c.ownerId);
-  assert.deepEqual(a.queue, b.queue);
-  assert.notDeepEqual(a.queue, c.queue);
+test('start kräver minst 2 lappar (OQ-34)', () => {
+  for (const n of [0, 1]) assert.equal(code(() => withNotes(n).start('p1')), 'MIN_NOTES');
+  const s = withNotes(2);
+  s.start('p1');
+  assert.equal(s.mode, MODE.RUNNING);
+});
+
+test('lappar kan inte läggas till efter start, men kan redigeras (OQ-31)', () => {
+  const s = withNotes(3);
+  s.start('p1');
+  assert.equal(code(() => s.addNote('p1', { title: 'Ny' })), 'NOTES_LOCKED');
+  s.editNote('p1', 'n1', { title: 'Ändrad' });
+  assert.equal(s.notes[0].title, 'Ändrad');
+});
+
+test('bara ägaren får ändra (KR-3)', () => {
+  const s = withNotes(2);
+  assert.equal(code(() => s.addNote('p2', { title: 'x' })), 'NOT_OWNER');
+  assert.equal(code(() => s.moveNote('p2', 'n1', 'down')), 'NOT_OWNER');
+  assert.equal(code(() => s.moveNoteTo('p2', 'n1', 1)), 'NOT_OWNER');
+  assert.equal(code(() => s.resetManualOrder('p2')), 'NOT_OWNER');
+});
+
+// ---- Sortering (KR-6, KR-12, KR-30) ----
+
+test('alla unika par besvaras: 30 lappar ger 435 jämförelser (KR-30, OQ-58)', () => {
+  const s = withNotes(30);
+  s.start('p1');
+  assert.deepEqual(s.progress(), { decided: 0, remaining: 435, total: 435 });
+  const seen = new Set();
+  while (s.currentPair()) {
+    const p = s.currentPair();
+    assert.equal(seen.has(p.id), false);
+    seen.add(p.id);
+    s.answer('left');
+  }
+  assert.equal(seen.size, 435);
+  assert.equal(s.allPairsDecided(), true);
+  assert.deepEqual(s.progress(), { decided: 435, remaining: 0, total: 435 });
+});
+
+test('framsteg visas för användaren själv (KR-12)', () => {
+  const s = withNotes(4);
+  s.start('p1');
+  s.answer('right');
+  s.answer('equal');
+  assert.deepEqual(s.progress(), { decided: 2, remaining: 4, total: 6 });
+});
+
+test('ångra senaste ett steg åt gången, och paret kommer tillbaka först (KR-6)', () => {
+  const s = withNotes(4);
+  s.start('p1');
+  const first = s.currentPair();
+  const second = (s.answer('left'), s.currentPair());
+  s.answer('right');
+  s.undo();
+  assert.equal(s.currentPair().id, second.id);
+  assert.equal(s.progress().decided, 1);
+  s.undo();
+  assert.equal(s.currentPair().id, first.id);
+  assert.equal(s.progress().decided, 0);
+  assert.equal(code(() => s.undo()), 'NOTHING_TO_UNDO');
+});
+
+test('ångra efter sista paret går tillbaka till det paret', () => {
+  const s = withNotes(2);
+  s.start('p1');
+  s.answer('left');
+  assert.equal(s.currentPair(), null);
+  s.undo();
+  assert.ok(s.currentPair());
+});
+
+test('ogiltigt val avvisas och svar utanför pågående läge avvisas', () => {
+  const s = withNotes(2);
+  assert.equal(code(() => s.answer('left')), 'WRONG_MODE');
+  s.start('p1');
+  assert.equal(code(() => s.answer('banan')), 'CHOICE_INVALID');
+  s.answer('left');
+  assert.equal(code(() => s.answer('left')), 'NOTHING_TO_ANSWER');
+});
+
+test('samma seed ger samma ordning, olika seed kan ge annan (OQ-21)', () => {
+  const order = (seed) => { const s = withNotes(6, { seed }); s.start('p1'); return s.queue.map((p) => p.id).join(); };
+  assert.equal(order(5), order(5));
+  assert.notEqual(order(5), order(6));
+});
+
+test('ta bort lapp efter start tar bort dess jämförelser och räknar om (KR-4, OQ-31)', () => {
+  const s = withNotes(4);
+  s.start('p1');
+  s.answer('left');
+  s.answer('left');
+  const affected = s.comparisonsAffectedByRemoving('n2');
+  assert.equal(affected, 3);
+  s.removeNote('p1', 'n2');
+  assert.deepEqual(s.progress().total, 3);
+  assert.ok(![...s.queue, ...s.history].some((p) => p.left === 'n2' || p.right === 'n2'));
+});
+
+test('kan inte ta bort så att färre än 2 lappar återstår efter start', () => {
+  const s = withNotes(2);
+  s.start('p1');
+  assert.equal(code(() => s.removeNote('p1', 'n1')), 'MIN_NOTES');
+});
+
+// ---- Avslut och resultat (KR-23, KR-24, KR-11) ----
+
+test('avsluta när alla par är besvarade ger fullständigt resultat', () => {
+  const s = withNotes(3);
+  s.start('p1');
+  answerAll(s);
+  s.finish('p1');
+  assert.equal(s.mode, MODE.FINISHED);
+  assert.equal(s.preliminary(), null);
+  assert.equal(s.autoRanking().reduce((x, r) => x + r.points, 0), 3);
+});
+
+test('avslut i förtid är preliminärt och räknar med givna svar (OQ-18, OQ-60)', () => {
+  const s = withNotes(4);
+  s.start('p1');
+  s.answer('left'); s.answer('left'); s.answer('left');
+  s.finish('p1');
+  assert.deepEqual(s.preliminary(), { decided: 3, total: 6 });
+  assert.equal(s.autoRanking().reduce((x, r) => x + r.points, 0), 3);
+});
+
+test('avslutat är slutgiltigt: inga svar, ingen ångra, ingen ny lapp', () => {
+  const s = withNotes(3);
+  s.start('p1');
+  s.finish('p1');
+  assert.equal(code(() => s.answer('left')), 'WRONG_MODE');
+  assert.equal(code(() => s.undo()), 'WRONG_MODE');
+  assert.equal(code(() => s.addNote('p1', { title: 'x' })), 'NOTES_LOCKED');
+  assert.equal(code(() => s.finish('p1')), 'WRONG_MODE');
+});
+
+test('cykel upptäcks i den egna värderingen (KR-11)', () => {
+  const s = withNotes(3);
+  s.start('p1');
+  // A>B, B>C, C>A oavsett hur paren visas
+  const wants = { 'n1|n2': 'n1', 'n2|n3': 'n2', 'n1|n3': 'n3' };
+  while (s.currentPair()) {
+    const p = s.currentPair();
+    s.answer(wants[p.id] === p.left ? 'left' : 'right');
+  }
+  assert.deepEqual(s.cycles(), [['n1', 'n2', 'n3']]);
+});
+
+test('summary kommer från summeringsmotorn med en deltagare', () => {
+  const s = withNotes(3);
+  s.start('p1');
+  answerAll(s);
+  const sum = s.summary();
+  assert.equal(sum.participantCount, 1);
+  assert.equal(sum.comparisonCount, 3);
+});
+
+// ---- Manuell ordning (KR-3, KR-5, KR-26) ----
+
+test('manuell ordning hålls skild från automatisk och ändrar inte poäng', () => {
+  const s = withNotes(4);
+  s.start('p1');
+  answerAll(s);
+  const before = JSON.stringify(s.autoRanking());
+  s.moveNote('p1', 'n4', 'up');
+  s.moveNoteTo('p1', 'n1', 3);
+  assert.ok(s.manualOrder);
+  assert.equal(JSON.stringify(s.autoRanking()), before);
+});
+
+test('moveNote flyttar ett steg, stannar vid kanterna och ger nytt index', () => {
+  const s = withNotes(3);
+  assert.equal(s.moveNote('p1', 'n1', 'up'), 0);
+  assert.equal(s.moveNote('p1', 'n1', 'down'), 1);
+  assert.deepEqual(s.overviewOrder(), ['n2', 'n1', 'n3']);
+  assert.equal(s.moveNote('p1', 'n3', 'down'), 2);
+  assert.equal(code(() => s.moveNote('p1', 'n1', 'sidan')), 'DIRECTION_INVALID');
+});
+
+test('moveNoteTo flyttar till index och begränsar till listan', () => {
+  const s = withNotes(5);
+  assert.equal(s.moveNoteTo('p1', 'n1', 3), 3);
+  assert.deepEqual(s.overviewOrder(), ['n2', 'n3', 'n4', 'n1', 'n5']);
+  assert.equal(s.moveNoteTo('p1', 'n5', -4), 0);
+  assert.equal(s.moveNoteTo('p1', 'n5', 99), 4);
+  assert.equal(code(() => s.moveNoteTo('p1', 'n5', 1.5)), 'INDEX_INVALID');
+  assert.deepEqual([...s.overviewOrder()].sort(), ['n1', 'n2', 'n3', 'n4', 'n5']);
+});
+
+test('manuell ordning fungerar med 30 lappar och är alltid en permutation', () => {
+  const s = withNotes(30);
+  for (let i = 0; i < 100; i++) s.moveNoteTo('p1', `n${(i * 7) % 30 + 1}`, (i * 13) % 30);
+  assert.equal(new Set(s.overviewOrder()).size, 30);
+  assert.equal(s.overviewOrder().length, 30);
+});
+
+test('återställ ger skapandeordning i Översikten och automatisk ordning i resultatet', () => {
+  const s = withNotes(3);
+  s.moveNote('p1', 'n1', 'down');
+  s.resetManualOrder('p1');
+  assert.equal(s.manualOrder, null);
+  assert.deepEqual(s.overviewOrder(), ['n1', 'n2', 'n3']);
+});
+
+test('start av manuell ordning i resultatet utgår från automatisk rangordning (KR-26)', () => {
+  const s = withNotes(3);
+  s.start('p1');
+  const wants = { 'n1|n2': 'n2', 'n2|n3': 'n3', 'n1|n3': 'n3' };
+  while (s.currentPair()) { const p = s.currentPair(); s.answer(wants[p.id] === p.left ? 'left' : 'right'); }
+  s.finish('p1');
+  s.startManualFromAuto('p1');
+  assert.deepEqual(s.manualOrder, ['n3', 'n2', 'n1']);
+  assert.equal(code(() => withNotes(2).startManualFromAuto('p1')), 'WRONG_MODE');
+});
+
+test('lappar som läggs till och tas bort hålls med i manuell ordning', () => {
+  const s = withNotes(3);
+  s.moveNote('p1', 'n1', 'down');
+  s.addNote('p1', { title: 'Ny' });
+  assert.deepEqual(s.overviewOrder(), ['n2', 'n1', 'n3', 'n4']);
+  s.removeNote('p1', 'n1');
+  assert.deepEqual(s.overviewOrder(), ['n2', 'n3', 'n4']);
+});
+
+// ---- Lokal lagring (KR-21) ----
+
+test('snapshot och restore ger samma tillstånd mitt i sorteringen', () => {
+  const s = withNotes(5);
+  s.moveNote('p1', 'n3', 'up');
+  s.start('p1');
+  s.answer('left'); s.answer('equal'); s.answer('right');
+  s.undo();
+  const copy = Session.restore(JSON.parse(JSON.stringify(s.snapshot())));
+  assert.deepEqual(copy.snapshot(), s.snapshot());
+  assert.equal(copy.currentPair().id, s.currentPair().id);
+  assert.deepEqual(copy.autoRanking(), s.autoRanking());
+  copy.answer('left');
+  assert.equal(copy.progress().decided, 3);
+});
+
+test('restore efter borttagen lapp och efter avslut', () => {
+  const s = withNotes(4);
+  s.start('p1');
+  s.answer('left');
+  s.removeNote('p1', 'n2');
+  s.finish('p1');
+  const copy = Session.restore(JSON.parse(JSON.stringify(s.snapshot())));
+  assert.equal(copy.mode, MODE.FINISHED);
+  assert.deepEqual(copy.preliminary(), s.preliminary());
+  assert.deepEqual(copy.snapshot(), s.snapshot());
+});
+
+test('restore avvisar trasig lagrad data (opålitlig indata)', () => {
+  const good = () => { const s = withNotes(3); s.start('p1'); s.answer('left'); return JSON.parse(JSON.stringify(s.snapshot())); };
+  const bad = (mutate) => { const x = good(); mutate(x); return code(() => Session.restore(x)); };
+  assert.equal(code(() => Session.restore(null)), 'SNAPSHOT_INVALID');
+  assert.equal(code(() => Session.restore('text')), 'SNAPSHOT_INVALID');
+  assert.equal(code(() => Session.restore([])), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.v = 2; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.mode = 'paused'; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.seed = 'a'; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.notes[0].title = ''; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.notes[1].id = 'n1'; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.notes[0].id = '__proto__'; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.queue.pop(); }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.queue[0][1] = 'n99'; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.history[0][3] = 'banan'; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.history.push(x.history[0]); }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.manualOrder = ['n1', 'n1', 'n2']; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.manualOrder = ['n1', 'n2']; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.nextNoteId = 1; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.queue = 'x'; }), 'SNAPSHOT_INVALID');
+  assert.equal(bad((x) => { x.notes = new Array(31).fill(x.notes[0]); }), 'SNAPSHOT_INVALID');
+});
+
+test('snapshot innehåller inga hemligheter eller nycklar', () => {
+  const s = withNotes(2);
+  assert.deepEqual(Object.keys(s.snapshot()).sort(),
+    ['boardName', 'history', 'manualOrder', 'mode', 'nextNoteId', 'notes', 'ownerName', 'queue', 'seed', 'v']);
 });

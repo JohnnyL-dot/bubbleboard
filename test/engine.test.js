@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generatePairs, arrangePairs, pairCount, createRng } from '../src/engine/pairs.js';
 import { computeRanking, computeStats, findCycles } from '../src/engine/scoring.js';
-import { tally } from '../src/engine/ballot.js';
 
 test('pairCount följer n(n-1)/2 (5, 10, 15, 20 lappar)', () => {
   assert.deepEqual([5, 10, 15, 20].map(pairCount), [10, 45, 105, 190]);
@@ -140,41 +139,7 @@ test('flera separata cykler redovisas var för sig', () => {
   assert.deepEqual(g, [['a', 'b', 'c'], ['d', 'e', 'f']]);
 });
 
-// ---- Röstsammanställning ----
-
-test('flest röster vinner (3–2)', () => {
-  const t = tally(['left', 'left', 'left', 'right', 'right']);
-  assert.equal(t.decided, true);
-  assert.equal(t.outcome, 'left');
-  assert.deepEqual(t.counts, { left: 3, right: 2, equal: 0 });
-});
-
-test('"lika viktiga" med flest röster är avgjort och skilt från oavgjort (OQ-49)', () => {
-  const t = tally(['equal', 'equal', 'left']);
-  assert.equal(t.decided, true);
-  assert.equal(t.outcome, 'equal');
-});
-
-test('delad förstaplats är inte avgjort (2–2–1, 1–1–1, 1–1)', () => {
-  assert.equal(tally(['left', 'left', 'right', 'right', 'equal']).decided, false);
-  assert.equal(tally(['left', 'right', 'equal']).decided, false);
-  const t = tally(['left', 'right']);
-  assert.equal(t.decided, false);
-  assert.equal(t.outcome, null);
-});
-
-test('noll röster är inte avgjort, och ogiltiga röster ignoreras', () => {
-  assert.equal(tally([]).decided, false);
-  assert.equal(tally([]).total, 0);
-  assert.equal(tally(['skip', undefined]).total, 0);
-});
-
-test('en ensam röst avgör (individuellt läge)', () => {
-  assert.deepEqual(tally(['equal']).outcome, 'equal');
-  assert.deepEqual(tally(['right']).outcome, 'right');
-});
-
-// ---- Granskningspunkter i testspecifikationen (TC-056, TC-057, TC-049) ----
+// ---- Determinism och ordning ----
 
 test('determinism: samma röstsekvens ger identisk rangordning (TC-056)', () => {
   const ids = ['a', 'b', 'c', 'd'];

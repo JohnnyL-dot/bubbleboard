@@ -1,15 +1,32 @@
-// Gränssnitt för individuell prioritering (prototyp enligt OQ-46).
+// Gränssnitt för individuell prioritering.
 // Presentationen använder Session och motorn men innehåller ingen sorteringslogik (NFR-10).
-// Allt hålls i minnet, inget sparas mellan besök (OQ-26, OQ-47).
+// Arbetet sparas i webbläsarens lokala lagring så att det överlever omladdning (KR-21).
+// Alla texter sätts som text, aldrig som kod (esc), även innehåll från filer (KR-31).
 
-import { Session, SessionError, LIMITS, COLORS, MODE } from '../session/session.js';
+import {
+  Session, SessionError, LIMITS, COLORS, MODE,
+} from '../session/session.js';
+import { createStore } from '../session/storage.js';
+import { MAX_FILE_BYTES, fileName, parseFile, serializeFile } from '../session/file.js';
 import { sv, t as translate, errorText } from '../i18n/sv.js';
-import { placeLabel, resultText } from './format.js';
+import { placeLabel, resultTsv } from './format.js';
+import { scrollDelta, targetIndex } from './reorder.js';
 
 const esc = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
+
+function defaultDownload(doc, name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const a = doc.createElement('a');
+  a.href = url;
+  a.download = name;
+  doc.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export function mount(root, {
   dict = sv,
@@ -17,13 +34,17 @@ export function mount(root, {
   seed,                      // fast seed för reproducerbar ordning i testbygge (TF-8, OQ-21)
   minAnswerInterval = 350,   // ms, skyddar mot dubbelklick och tangentspam (NFR-9)
   now = () => Date.now(),
+  store = createStore(() => globalThis.localStorage),
+  download,
+  readFile = (file) => file.text(),
 } = {}) {
   const t = (key, params) => translate(key, params, dict);
   const doc = root.ownerDocument;
+  const win = doc.defaultView;
 
   const state = {
     session: null,
-    view: 'free',        // 'free' (fritt läge) | 'sort' (sorteringsläge), OQ-35
+    view: 'overview',    // 'overview' (Översikt) | 'sort' (sorteringsläge), OQ-35, OQ-55
     editingId: null,
     draft: { title: '', description: '', category: '', color: '' },
     startDraft: { boardName: '', alias: '' },
@@ -32,9 +53,41 @@ export function mount(root, {
     confirm: null,       // { message, onYes }
     copyFallback: '',
     lastAnswerAt: -Infinity,
+    storageOk: true,     // false: lagringen går inte att använda (KR-21)
+    storageNote: '',     // t.ex. trasigt sparat arbete
+    pendingFile: null,   // inläst board-fil som väntar på namn och start
+    fileView: null,      // inläst resultatfil, visas skrivskyddat
+    focus: null,         // { id, dir } återställer fokus efter flytt (tangentbord)
   };
 
+  const live = doc.createElement('div');
+  live.className = 'sr-only';
+  live.setAttribute('aria-live', 'polite');
+  live.setAttribute('role', 'status');
+  if (root.parentNode) root.insertAdjacentElement('afterend', live);
+
   const owner = () => state.session.ownerId;
+  const emptyDraft = () => ({ title: '', description: '', category: '', color: '' });
+
+  // ---------- Lagring (KR-21) ----------
+
+  state.storageOk = store.available();
+
+  function persist() {
+    if (!state.session) { store.clear(); return; }
+    if (!store.save(state.session.snapshot())) state.storageOk = false;
+  }
+
+  try {
+    const saved = store.load();
+    if (saved) {
+      state.session = Session.restore(saved);
+      state.view = state.session.mode === MODE.RUNNING ? 'sort' : 'overview';
+    }
+  } catch {
+    store.clear();
+    state.storageNote = t('storage.corrupt');
+  }
 
   // ---------- Hjälpare ----------
 
@@ -47,6 +100,7 @@ export function mount(root, {
       if (err instanceof SessionError) state.error = errorText(err, dict);
       else throw err;
     }
+    persist();
     render();
   }
 
@@ -65,14 +119,23 @@ export function mount(root, {
       <p class="note-meta">${note.category ? `<span class="category">${esc(note.category)}</span>` : ''}${colorBadge(note.color)}</p>`;
   }
 
+  function banners() {
+    return `
+      ${!state.storageOk ? `<p class="warning" role="alert">${esc(t(state.session ? 'storage.failed' : 'storage.unavailable'))}</p>` : ''}
+      ${state.storageNote ? `<p class="warning" role="alert">${esc(state.storageNote)}</p>` : ''}`;
+  }
+
   // ---------- Vyer ----------
 
   function renderStart() {
+    const pending = state.pendingFile;
     return `
       <main class="start">
         <h1>${esc(t('app.title'))}</h1>
         <p>${esc(t('app.tagline'))}</p>
+        ${banners()}
         ${state.error ? `<p class="error" role="alert">${esc(state.error)}</p>` : ''}
+        ${pending ? `<p class="notice" role="status">${esc(t('file.loaded', { board: pending.boardName, count: pending.notes.length }))}</p>` : ''}
         <form data-form="start">
           <label>${esc(t('start.boardName'))}
             <input name="boardName" value="${esc(state.startDraft.boardName)}" autocomplete="off"></label>
@@ -84,11 +147,16 @@ export function mount(root, {
           </div>
           <p id="group-info" class="hint">${esc(t('start.groupSoon'))}</p>
         </form>
+        <p class="file-load">
+          <label>${esc(t('file.load'))}
+            <input type="file" accept=".json,application/json" data-file></label>
+        </p>
+        <p class="hint">${esc(t('file.loadHint'))}</p>
       </main>`;
   }
 
   function header(s) {
-    const showToggle = s.mode === MODE.RUNNING || s.mode === MODE.PAUSED;
+    const showToggle = s.mode === MODE.RUNNING;
     return `
       <header class="top">
         <div>
@@ -97,7 +165,7 @@ export function mount(root, {
         </div>
         ${showToggle ? `
         <nav class="toggle" aria-label="${esc(t('mode.label'))}">
-          <button data-action="view" data-view="free" aria-pressed="${state.view === 'free'}">${esc(t('view.free'))}</button>
+          <button data-action="view" data-view="overview" aria-pressed="${state.view === 'overview'}">${esc(t('view.overview'))}</button>
           <button data-action="view" data-view="sort" aria-pressed="${state.view === 'sort'}">${esc(t('view.sort'))}</button>
         </nav>` : ''}
       </header>`;
@@ -127,28 +195,49 @@ export function mount(root, {
       </form>`;
   }
 
-  function renderFree() {
+  /** Dragpunkt och upp/ned-knappar för en rad (KR-5, WCAG 2.5.7: alternativ till drag). */
+  function moveControls(id, index, count, title) {
+    return `
+      <span class="move">
+        <button type="button" class="handle" data-drag aria-label="${esc(t('move.drag'))}: ${esc(title)}" title="${esc(t('move.drag'))}">⠿</button>
+        <button data-action="move" data-dir="up" data-id="${esc(id)}" aria-label="${esc(t('move.up'))}: ${esc(title)}"${index === 0 ? ' disabled' : ''}>▲</button>
+        <button data-action="move" data-dir="down" data-id="${esc(id)}" aria-label="${esc(t('move.down'))}: ${esc(title)}"${index === count - 1 ? ' disabled' : ''}>▼</button>
+      </span>`;
+  }
+
+  function renderOverview() {
     const s = state.session;
     const canEditList = s.mode !== MODE.FINISHED;
-    const items = s.notes.map((n) => {
-      const body = state.editingId === n.id ? noteForm(s) : noteBody(n);
-      const actions = canEditList && state.editingId !== n.id ? `
+    const order = s.overviewOrder();
+    const items = order.map((id, i) => {
+      const n = s.notes.find((x) => x.id === id);
+      const editing = state.editingId === n.id;
+      const body = editing ? noteForm(s) : noteBody(n);
+      const actions = canEditList && !editing ? `
         <div class="row small">
           <button data-action="edit" data-id="${n.id}">${esc(t('note.edit'))}</button>
-          ${s.mode === MODE.PREPARED ? `<button data-action="duplicate" data-id="${n.id}">${esc(t('note.duplicate'))}</button>` : ''}
+          ${s.mode === MODE.PREPARED ? `<button data-action="duplicate" data-id="${n.id}"${s.notes.length >= LIMITS.MAX_NOTES ? ' disabled' : ''}>${esc(t('note.duplicate'))}</button>` : ''}
           <button data-action="remove" data-id="${n.id}">${esc(t('note.remove'))}</button>
         </div>` : '';
-      return `<li class="note${n.color ? ` note-${esc(n.color)}` : ''}">${body}${actions}</li>`;
+      return `
+        <li class="note${n.color ? ` note-${esc(n.color)}` : ''}" data-id="${n.id}">
+          <div class="note-head"><span class="num">${i + 1}</span><div class="note-main">${body}</div></div>
+          ${editing ? '' : moveControls(n.id, i, order.length, n.title)}
+          ${actions}
+        </li>`;
     }).join('');
     return `
       ${state.editingId == null ? noteForm(s) : ''}
       <p class="count">${esc(t('note.count', { count: s.notes.length, max: LIMITS.MAX_NOTES }))}</p>
-      ${s.notes.length ? `<ul class="notes">${items}</ul>` : `<p class="hint">${esc(t('note.empty'))}</p>`}
-      ${s.mode === MODE.PREPARED ? `
-        <div class="row">
-          <button data-action="start" class="primary"${s.notes.length < LIMITS.MIN_NOTES ? ' disabled' : ''}>${esc(t('sort.start'))}</button>
-        </div>
-        ${s.notes.length < LIMITS.MIN_NOTES ? `<p class="hint">${esc(t('sort.needTwo'))}</p>` : ''}` : ''}`;
+      ${s.notes.length > 1 ? `<p class="hint">${esc(t('overview.hint'))}</p>` : ''}
+      ${s.manualOrder ? `<p class="hint">${esc(t('overview.manualInfo'))} <button data-action="reset-order">${esc(t('overview.reset'))}</button></p>` : ''}
+      ${s.notes.length ? `<ol class="notes sortable" data-sortable>${items}</ol>` : `<p class="hint">${esc(t('note.empty'))}</p>`}
+      <div class="row">
+        ${s.mode === MODE.PREPARED ? `<button data-action="start" class="primary"${s.notes.length < LIMITS.MIN_NOTES ? ' disabled' : ''}>${esc(t('sort.start'))}</button>` : ''}
+        <button data-action="save-file"${s.notes.length < LIMITS.MIN_NOTES ? ' disabled' : ''}>${esc(t('file.saveBoard'))}</button>
+      </div>
+      ${s.mode === MODE.PREPARED && s.notes.length < LIMITS.MIN_NOTES ? `<p class="hint">${esc(t('sort.needTwo'))}</p>` : ''}
+      ${state.notice ? `<p role="status">${esc(state.notice)}</p>` : ''}`;
   }
 
   function renderSort() {
@@ -158,9 +247,6 @@ export function mount(root, {
     const controls = `
       <div class="row small">
         <button data-action="undo"${decided === 0 ? ' disabled' : ''}>${esc(t('sort.undo'))}</button>
-        ${s.mode === MODE.PAUSED
-          ? `<button data-action="resume">${esc(t('sort.resume'))}</button>`
-          : `<button data-action="pause">${esc(t('sort.pause'))}</button>`}
         <button data-action="finish-early">${esc(t('sort.finishEarly'))}</button>
       </div>`;
     const progress = `
@@ -168,9 +254,6 @@ export function mount(root, {
         <progress max="${total}" value="${decided}" aria-label="${esc(t('sort.done', { decided, total }))}"></progress>
         <span>${esc(t('sort.done', { decided, total }))}</span>
       </div>`;
-    if (s.mode === MODE.PAUSED) {
-      return `${progress}<p class="paused" role="status">${esc(t('sort.pausedInfo'))}</p>${controls}`;
-    }
     if (!pair) {
       return `${progress}<p role="status">${esc(t('sort.allDone'))}</p>
         <div class="row"><button data-action="show-result" class="primary">${esc(t('sort.showResult'))}</button></div>${controls}`;
@@ -195,49 +278,111 @@ export function mount(root, {
       <p class="hint">${esc(t('sort.keys'))}</p>`;
   }
 
-  function renderResult() {
-    const s = state.session;
-    const auto = new Map(s.autoRanking().map((r) => [r.id, r]));
-    const order = s.displayedOrder();
-    const manual = s.manualOrder != null;
-    const prelim = s.preliminary();
-    const cycles = s.cycles();
-    const rows = order.map((id, i) => {
-      const r = auto.get(id);
-      const n = s.notes.find((x) => x.id === id);
-      const place = manual ? String(i + 1) : placeLabel(r, t);
+  /** Underlag för resultatvyn, från en session eller en inläst fil. */
+  function sessionModel(s) {
+    return {
+      boardName: s.boardName,
+      notes: s.notes,
+      rows: s.autoRanking(),
+      manual: s.manualOrder ? [...s.manualOrder] : null,
+      preliminary: s.preliminary(),
+      preliminaryKnown: s.preliminary() !== null,
+      cycles: s.cycles(),
+    };
+  }
+
+  function fileModel(f) {
+    const id = (n) => `n${n}`;
+    return {
+      boardName: f.boardName,
+      notes: f.notes.map((n) => ({ ...n, id: id(n.id) })),
+      rows: f.resultat.rang.map((r) => ({
+        id: id(r.id), place: r.plats, shared: r.delad, points: r.p, wins: r.v, losses: r.f, equals: r.l,
+      })),
+      manual: f.resultat.manuell ? f.resultat.manuell.map(id) : null,
+      preliminary: null,
+      preliminaryKnown: f.resultat.preliminar,
+      cycles: [],
+    };
+  }
+
+  function renderResultBody(model, editable) {
+    const note = new Map(model.notes.map((n) => [n.id, n]));
+    const title = (id) => note.get(id)?.title ?? '';
+    const rowOf = new Map(model.rows.map((r) => [r.id, r]));
+
+    const autoRows = model.rows.map((r) => {
+      const n = note.get(r.id);
       return `
         <li class="rank-row${n.color ? ` note-${esc(n.color)}` : ''}">
-          <span class="place" aria-label="${esc(t('result.place'))}">${esc(place)}</span>
+          <span class="place" aria-label="${esc(t('result.place'))}">${esc(placeLabel(r, t))}</span>
           <div class="rank-body">${noteBody(n)}</div>
           <span class="pts">${r.points} ${esc(t('result.points'))}</span>
-          <span class="move">
-            <button data-action="move" data-dir="up" data-id="${id}" aria-label="${esc(t('result.up'))}: ${esc(n.title)}"${i === 0 ? ' disabled' : ''}>▲</button>
-            <button data-action="move" data-dir="down" data-id="${id}" aria-label="${esc(t('result.down'))}: ${esc(n.title)}"${i === order.length - 1 ? ' disabled' : ''}>▼</button>
-          </span>
         </li>`;
     }).join('');
-    const stats = s.stats().map((r) => `
-      <tr><th scope="row">${esc(noteTitle(r.id))}</th><td>${r.wins}</td><td>${r.losses}</td><td>${r.equals}</td></tr>`).join('');
-    const list = s.comparisonList().map((h) => `
-      <li>${esc(noteTitle(h.left))} – ${esc(noteTitle(h.right))}: ${esc(t('result.votes', h.counts))}</li>`).join('');
+
+    const manualRows = model.manual ? model.manual.map((id, i) => {
+      const n = note.get(id);
+      const r = rowOf.get(id);
+      return `
+        <li class="rank-row manual${n.color ? ` note-${esc(n.color)}` : ''}" data-id="${esc(id)}">
+          <span class="place" aria-label="${esc(t('result.place'))}">${i + 1}</span>
+          <div class="rank-body">${noteBody(n)}</div>
+          <span class="pts">${r.points} ${esc(t('result.points'))}</span>
+          ${editable ? moveControls(id, i, model.manual.length, n.title) : ''}
+        </li>`;
+    }).join('') : '';
+
+    const stats = model.rows.map((r) => `
+      <tr><th scope="row">${esc(title(r.id))}</th><td>${r.wins}</td><td>${r.losses}</td><td>${r.equals}</td></tr>`).join('');
+
     return `
-      <h2>${esc(t('result.title'))}${manual ? ` – ${esc(t('result.manualOrder'))}` : ` – ${esc(t('result.autoOrder'))}`}</h2>
-      ${prelim ? `<p class="prelim" role="status"><strong>${esc(t('result.preliminary', prelim))}</strong></p>` : ''}
-      ${cycles.map((g) => `<p class="warning" role="alert">${esc(t('result.cycleWarning', { notes: g.map(noteTitle).join(', ') }))}</p>`).join('')}
-      ${manual ? `<p class="hint">${esc(t('result.manualActive'))}</p>` : ''}
-      <ol class="ranking">${rows}</ol>
+      ${model.preliminary
+        ? `<p class="prelim" role="status"><strong>${esc(t('result.preliminary', model.preliminary))}</strong></p>`
+        : (model.preliminaryKnown ? `<p class="prelim" role="status"><strong>${esc(t('result.preliminaryShort'))}</strong></p>` : '')}
+      ${model.cycles.map((g) => `<p class="warning" role="alert">${esc(t('result.cycleWarning', { notes: g.map(title).join(', ') }))}</p>`).join('')}
+      <h3>${esc(t('result.autoOrder'))}</h3>
+      <ol class="ranking">${autoRows}</ol>
+      ${model.manual ? `
+        <h3>${esc(t('result.manualOrder'))}</h3>
+        <p class="hint">${esc(t('result.manualActive'))}</p>
+        <ol class="ranking sortable" data-sortable>${manualRows}</ol>` : ''}
+      ${editable ? `<div class="row">
+        ${model.manual
+          ? `<button data-action="reset-order">${esc(t('result.reset'))}</button>`
+          : `<button data-action="start-manual">${esc(t('result.startManual'))}</button>`}
+      </div>` : ''}
+      <h3>${esc(t('result.statistics'))}</h3>
+      <table class="stats"><thead><tr><th scope="col"></th><th scope="col">${esc(t('result.wins'))}</th><th scope="col">${esc(t('result.losses'))}</th><th scope="col">${esc(t('result.equals'))}</th></tr></thead><tbody>${stats}</tbody></table>`;
+  }
+
+  function renderResult() {
+    const s = state.session;
+    return `
+      <h2>${esc(t('result.title'))}</h2>
+      ${renderResultBody(sessionModel(s), true)}
       <div class="row">
-        ${manual ? `<button data-action="reset-order">${esc(t('result.reset'))}</button>` : ''}
         <button data-action="copy" class="primary">${esc(t('result.copy'))}</button>
+        <button data-action="save-file">${esc(t('file.saveResult'))}</button>
         <button data-action="new-session">${esc(t('result.newSession'))}</button>
       </div>
       ${state.notice ? `<p role="status">${esc(state.notice)}</p>` : ''}
-      ${state.copyFallback ? `<textarea readonly rows="6" class="copybox">${esc(state.copyFallback)}</textarea>` : ''}
-      <h3>${esc(t('result.statistics'))}</h3>
-      <table class="stats"><thead><tr><th scope="col"></th><th scope="col">${esc(t('result.wins'))}</th><th scope="col">${esc(t('result.losses'))}</th><th scope="col">${esc(t('result.equals'))}</th></tr></thead><tbody>${stats}</tbody></table>
-      <h3>${esc(t('result.comparisons'))}</h3>
-      <ul class="comparisons">${list}</ul>`;
+      ${state.copyFallback ? `<textarea readonly rows="6" class="copybox">${esc(state.copyFallback)}</textarea>` : ''}`;
+  }
+
+  function renderFileView() {
+    const f = state.fileView;
+    return `
+      <header class="top"><div><h1>${esc(f.boardName)}</h1><p class="mode">${esc(t('file.readonlyTitle'))}</p></div></header>
+      <main>
+        ${state.error ? `<p class="error" role="alert">${esc(state.error)}</p>` : ''}
+        <h2>${esc(t('result.title'))}</h2>
+        ${renderResultBody(fileModel(f), false)}
+        <div class="row">
+          <button data-action="restart-from-file" class="primary">${esc(t('file.restart'))}</button>
+          <button data-action="close-file">${esc(t('file.close'))}</button>
+        </div>
+      </main>`;
   }
 
   function renderConfirm() {
@@ -257,21 +402,40 @@ export function mount(root, {
   function render() {
     const s = state.session;
     if (!s) {
-      root.innerHTML = renderStart();
+      root.innerHTML = state.fileView ? renderFileView() : renderStart();
       return;
     }
     let content;
     if (s.mode === MODE.FINISHED) content = renderResult();
-    else if (state.view === 'sort' && s.mode !== MODE.PREPARED) content = renderSort();
-    else content = renderFree();
+    else if (state.view === 'sort' && s.mode === MODE.RUNNING) content = renderSort();
+    else content = renderOverview();
     root.innerHTML = `
       ${header(s)}
       <main>
+        ${banners()}
         ${state.error ? `<p class="error" role="alert">${esc(state.error)}</p>` : ''}
         ${content}
-        ${state.notice && s.mode === MODE.RUNNING ? `<p class="notice" role="status">${esc(state.notice)}</p>` : ''}
+        ${state.notice && s.mode === MODE.RUNNING && state.view === 'sort' ? `<p class="notice" role="status">${esc(state.notice)}</p>` : ''}
       </main>
       ${renderConfirm()}`;
+    restoreFocus();
+  }
+
+  /** Efter en flytt byggs listan om. Fokus läggs tillbaka så att tangentbordsanvändaren inte tappar sin plats. */
+  function restoreFocus() {
+    const f = state.focus;
+    state.focus = null;
+    if (!f) return;
+    const find = (dir) => root.querySelector(`[data-action="move"][data-dir="${dir}"][data-id="${CSS.escape ? CSS.escape(f.id) : f.id}"]`);
+    const other = f.dir === 'up' ? 'down' : 'up';
+    const el = [find(f.dir), find(other)].find((e) => e && !e.disabled)
+      ?? root.querySelector(`li[data-id="${f.id}"] [data-drag]`);
+    el?.focus?.();
+  }
+
+  function announce(text) {
+    live.textContent = '';
+    live.textContent = text;
   }
 
   // ---------- Händelser ----------
@@ -289,9 +453,8 @@ export function mount(root, {
       const s = state.session;
       const id = el.dataset.id;
       const affected = s.comparisonsAffectedByRemoving(id);
-      const started = s.mode !== MODE.PREPARED;
       state.confirm = {
-        message: started && affected > 0
+        message: s.mode !== MODE.PREPARED && affected > 0
           ? t('confirm.remove', { count: affected })
           : t('confirm.removeSimple', { title: noteTitle(id) }),
         onYes: () => s.removeNote(owner(), id),
@@ -300,8 +463,6 @@ export function mount(root, {
     start: () => { state.session.start(owner()); state.view = 'sort'; },
     answer: (el) => answer(el.dataset.choice),
     undo: () => state.session.undo(),
-    pause: () => state.session.pause(owner()),
-    resume: () => state.session.resume(owner()),
     'finish-early': () => {
       const s = state.session;
       const { decided, total } = s.progress();
@@ -314,11 +475,37 @@ export function mount(root, {
       const s = state.session;
       state.confirm = { message: t('confirm.finish'), onYes: () => s.finish(owner()) };
     },
-    move: (el) => state.session.moveNote(owner(), el.dataset.id, el.dataset.dir),
+    move: (el) => {
+      const s = state.session;
+      const id = el.dataset.id;
+      const dir = el.dataset.dir;
+      const index = s.moveNote(owner(), id, dir);
+      state.focus = { id, dir };
+      announce(t('move.moved', { title: noteTitle(id), place: index + 1, total: s.notes.length }));
+    },
+    'start-manual': () => state.session.startManualFromAuto(owner()),
     'reset-order': () => state.session.resetManualOrder(owner()),
+    'save-file': () => {
+      const s = state.session;
+      (download ?? ((name, text) => defaultDownload(doc, name, text)))(fileName(s.boardName), serializeFile(s));
+      state.notice = t('file.saved');
+    },
+    'restart-from-file': () => {
+      const f = state.fileView;
+      state.pendingFile = { boardName: f.boardName, notes: f.notes };
+      state.startDraft.boardName = f.boardName;
+      state.fileView = null;
+    },
+    'close-file': () => { state.fileView = null; },
     'new-session': () => {
-      state.session = null; state.view = 'free'; state.editingId = null;
-      state.draft = emptyDraft(); state.copyFallback = '';
+      state.confirm = {
+        message: t('confirm.newSession'),
+        onYes: () => {
+          state.session = null; state.view = 'overview'; state.editingId = null;
+          state.draft = emptyDraft(); state.copyFallback = ''; state.pendingFile = null;
+          state.startDraft = { boardName: '', alias: '' };
+        },
+      };
     },
     'confirm-yes': () => {
       const c = state.confirm;
@@ -337,12 +524,9 @@ export function mount(root, {
     state.notice = t('sort.registered');
   }
 
-  function emptyDraft() {
-    return { title: '', description: '', category: '', color: '' };
-  }
-
   async function copyResult() {
-    const text = resultText(state.session, t);
+    const s = state.session;
+    const text = resultTsv(sessionModel(s), t);
     try {
       if (!clipboard) throw new Error('no clipboard');
       await clipboard.writeText(text);
@@ -370,10 +554,13 @@ export function mount(root, {
     if (form.dataset.form === 'start') {
       state.startDraft = { boardName: data.boardName ?? '', alias: data.alias ?? '' };
       run(() => {
-        state.session = new Session({
-          boardName: data.boardName, ownerName: data.alias, individual: true, seed,
-        });
-        state.view = 'free';
+        const session = new Session({ boardName: data.boardName, ownerName: data.alias, seed });
+        if (state.pendingFile) {
+          for (const n of state.pendingFile.notes) session.addNote(session.ownerId, n);
+        }
+        state.session = session;
+        state.pendingFile = null;
+        state.view = 'overview';
       });
     } else if (form.dataset.form === 'note') {
       state.draft = {
@@ -393,6 +580,35 @@ export function mount(root, {
     }
   });
 
+  // Inläsning av fil (KR-31). Storleken kontrolleras innan filen läses.
+  root.addEventListener('change', async (event) => {
+    const input = event.target;
+    if (!input.matches?.('[data-file]')) return;
+    const file = input.files?.[0];
+    if (!file) return;
+    // Namn och alias som skrivits hålls kvar.
+    const form = root.querySelector('[data-form="start"]');
+    if (form) {
+      const d = Object.fromEntries(new FormData(form));
+      state.startDraft = { boardName: d.boardName ?? '', alias: d.alias ?? '' };
+    }
+    state.error = '';
+    try {
+      if (file.size > MAX_FILE_BYTES) throw new SessionError('FILE_TOO_LARGE');
+      const parsed = parseFile(await readFile(file));
+      if (parsed.typ === 'resultat') {
+        state.fileView = parsed;
+      } else {
+        state.pendingFile = parsed;
+        state.startDraft.boardName = parsed.boardName;
+      }
+    } catch (err) {
+      if (err instanceof SessionError) state.error = errorText(err, dict);
+      else state.error = errorText(new SessionError('FILE_INVALID'), dict);
+    }
+    render();
+  });
+
   // Tangentbordsnavigering i jämförelseflödet (NFR-1).
   doc.addEventListener('keydown', (event) => {
     const s = state.session;
@@ -406,6 +622,71 @@ export function mount(root, {
     if (event.repeat) return;
     run(() => answer(choice));
   });
+
+  // ---------- Dra och släpp med Pointer Events (KR-5, arkitektens C3) ----------
+  // HTML5-drag fungerar inte på pekskärm. Handtaget har touch-action: none så att
+  // resten av sidan går att rulla. Upp/ned-knapparna är alternativet utan drag.
+
+  let drag = null;
+
+  function dragFrame() {
+    if (!drag) return;
+    const dy = drag.y - drag.startY + (win.scrollY - drag.scrollStart);
+    drag.li.style.transform = `translateY(${dy}px)`;
+    const target = targetIndex(drag.mids, drag.from, drag.y + win.scrollY);
+    drag.target = target;
+    drag.rows.forEach((r, i) => r.classList.remove('drop-before', 'drop-after'));
+    const others = drag.rows.filter((_, i) => i !== drag.from);
+    if (target < others.length) others[target].classList.add('drop-before');
+    else others[others.length - 1]?.classList.add('drop-after');
+  }
+
+  root.addEventListener('pointerdown', (event) => {
+    const handle = event.target.closest?.('[data-drag]');
+    if (!handle || (event.button != null && event.button > 0) || state.confirm) return;
+    const li = handle.closest('li[data-id]');
+    const list = li?.parentElement;
+    if (!list) return;
+    const rows = [...list.children];
+    const scrollY = win.scrollY || 0;
+    drag = {
+      id: li.dataset.id, li, rows, from: rows.indexOf(li), target: rows.indexOf(li),
+      startY: event.clientY, y: event.clientY, scrollStart: scrollY, pointerId: event.pointerId,
+      mids: rows.map((r) => { const b = r.getBoundingClientRect(); return b.top + b.height / 2 + scrollY; }),
+      timer: win.setInterval(() => {
+        const d = scrollDelta(drag.y, win.innerHeight);
+        if (d) { win.scrollBy(0, d); dragFrame(); }
+      }, 16),
+    };
+    handle.setPointerCapture?.(event.pointerId);
+    li.classList.add('dragging');
+    event.preventDefault();
+    dragFrame();
+  });
+
+  root.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag.y = event.clientY;
+    dragFrame();
+  });
+
+  function endDrag(event, commit) {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const d = drag;
+    drag = null;
+    win.clearInterval(d.timer);
+    if (commit && d.target !== d.from) {
+      run(() => {
+        const index = state.session.moveNoteTo(owner(), d.id, d.target);
+        state.focus = { id: d.id, dir: 'up' };
+        announce(t('move.moved', { title: noteTitle(d.id), place: index + 1, total: state.session.notes.length }));
+      });
+    } else {
+      render();
+    }
+  }
+  root.addEventListener('pointerup', (event) => endDrag(event, true));
+  root.addEventListener('pointercancel', (event) => endDrag(event, false));
 
   render();
   return { state, render };

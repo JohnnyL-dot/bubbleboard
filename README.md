@@ -14,12 +14,12 @@ npm test
 ## Struktur
 | Mapp | Innehåll |
 |---|---|
-| `src/engine/` | Sorteringsmotor: par, poäng, cykler, röstsammanställning. Ingen koppling till gränssnitt eller session (KR-8, NFR-10). |
-| `src/session/` | Sessionslägen, lappar, omröstning, resultat. Ren logik, allt i minnet. |
-| `src/ui/` | Gränssnitt (individuellt läge). Ingen sorteringslogik. |
+| `src/engine/` | Ren logik utan I/O: par, poäng, cykler och summering av deltagares poäng (`summering.js`, KR-17, OQ-60). Kan köras i webbläsaren och på en server (KR-8, NFR-10). |
+| `src/session/` | `session.js` (lappar, sortering, manuell ordning, snapshot), `file.js` (spara och läsa in JSON-fil, KR-31), `storage.js` (lokal lagring, KR-21). |
+| `src/ui/` | Gränssnitt (individuellt läge), `format.js` (tabbavgränsad text, KR-23), `reorder.js` (dra och släpp, ren logik). Ingen sorteringslogik. |
 | `src/i18n/` | Alla texter på svenska i språkfil (NFR-11). |
-| `test/` | Enhetstester (`node:test`). |
+| `test/` | Enhetstester (`node:test`), inklusive egenskapstester för summeringen. |
 
-## Status
-Byggt: KR-1, 3, 4, 6, 7, 8, 10, 11, 12, 20, 23, 24, 26, 29 och NFR-1, 9, 10, 11 för individuell prioritering.
-Ej byggt: gruppsession och realtid (KR-13–KR-21, NFR-2, 5, 6) i väntan på OQ-51.
+## Status (kravspecifikation v3.0)
+Byggt: KR-1 (2–30 lappar), 3, 4, 5, 6, 7, 8, 10, 11, 12, 21 (lokal lagring), 23 (kopiera tabbavgränsad text), 24, 26, 29, 30, 31 (spara och läsa in fil) och NFR-1, 9, 10, 11.
+Ej byggt: gruppsession och server (KR-13, KR-32, NFR-2, 5, 6) i väntan på OQ-51, och allt märkt Förslag (OQ-61 till OQ-70).
