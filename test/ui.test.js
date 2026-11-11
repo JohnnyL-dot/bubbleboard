@@ -116,7 +116,7 @@ test('Om verktyget: från steg 2, Översikt och resultat, tillbaka utan förlust
   a.begin();
   ['A', 'B', 'C'].forEach((x) => a.addNote(x));
   assert.ok(a.$('[data-action="about"]'), 'länk i Översikten');
-  assert.doesNotMatch(a.root.textContent, /Version \d/, 'versionsnumret syns inte på boardens skärmar (KR-40)');
+  assert.match(a.dom.window.document.querySelector('.app-version').textContent, /^Version \d/, 'versionsnumret syns kvar på alla sidor');
   a.action('about');
   a.action('about-back');
   assert.equal(a.$$('.note').length, 3, 'lapparna finns kvar');
@@ -713,14 +713,14 @@ test('alla gränssnittstexter finns i språkfilen (NFR-11)', async () => {
   }
 });
 
-test('versionsnumret visas på Om verktyget och följer package.json och taggen', async () => {
+test('versionsnumret visas på alla sidor och på Om verktyget och följer package.json och taggen', async () => {
   const fs = await import('node:fs');
   const { VERSION } = await import('../src/version.js');
   const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(VERSION, pkg.version);
   assert.match(VERSION, /^\d+\.\d+\.\d+$/);
   const a = setup();
-  assert.equal(a.dom.window.document.querySelector('.app-version'), null, 'ingen fast sidfot längre (KR-35)');
+  assert.equal(a.dom.window.document.querySelector('.app-version').textContent, `Version ${VERSION}`, 'på alla sidor');
   a.action('get-started'); a.action('about');
   assert.equal(a.$('.version').textContent, `Version ${VERSION}`);
 });
