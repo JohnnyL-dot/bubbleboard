@@ -20,6 +20,7 @@ npm test
 | `src/i18n/` | Alla texter på svenska i språkfil (NFR-11). |
 | `test/` | Enhetstester (`node:test`), inklusive egenskapstester för summeringen. |
 
-## Status (kravspecifikation v3.0)
-Byggt: KR-1 (2–25 lappar, OQ-71), 3, 4, 5, 6, 7, 8, 10, 11, 12, 21 (lokal lagring), 23 (kopiera tabbavgränsad text), 24, 26, 29, 30, 31 (spara och läsa in fil) och NFR-1, 9, 10, 11.
+## Status (kravspecifikation v3.4)
+Byggt: KR-1 (2–25 lappar, OQ-71), 3, 4, 5, 6, 7, 8, 10, 11, 12, 21 (lokal lagring), 23 (kopiera tabbavgränsad text), 24, 26, 29, 30, 31 (spara och läsa in fil), 33 (välkomststeg), 34 (Kom igång, ingen gruppsessionsknapp), 35 (Om verktyget med versionsnummer), 39 (tomläge med exempel), 40 (inga systemlägen i individuellt läge) och NFR-1, 9, 10, 11, 12.
+Väntar: KR-37 och KR-38 (designguiden, leverans 5), KR-36 (delad sessionslänk, kräver gruppsession).
 Ej byggt: gruppsession och server (KR-13–17, 20, 21, 32, NFR-2–6). OQ-51 är godkänd för en mätprototyp (gren `prototype-group`, körs lokalt, publiceras inte); det riktiga bygget väntar på att mätresultatet godkänns. Allt märkt Förslag (OQ-61 till OQ-70) är inte byggt.

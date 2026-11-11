@@ -95,6 +95,18 @@ input, select, textarea {
 .rank-row.manual .move { grid-column: 2; }
 .file-load input { display: block; margin-top: 4px; max-width: 100%; }
 
-/* Versionsnummer längst ner till höger */
-body { padding-bottom: 32px; }
-.app-version { position: fixed; right: 8px; bottom: 6px; font-size: .75rem; color: var(--muted); background: var(--card); padding: 2px 6px; border-radius: 6px; pointer-events: none; }
+/* Välkomststeg, Om verktyget och tomläge (KR-33, KR-35, KR-39, NFR-12) */
+h1 { overflow-wrap: anywhere; }
+h1:focus { outline: none; }
+.product { margin: 16px 0 0; color: var(--muted); font-weight: 700; letter-spacing: .02em; }
+.welcome h1, .about h1 { margin-top: 2px; }
+.welcome .lead, .about .lead { font-size: 1.1rem; }
+.welcome p, .about p, .empty p { overflow-wrap: anywhere; }
+.row .primary { max-width: 100%; }
+button.link { min-height: 44px; border: 0; background: none; color: var(--primary); text-decoration: underline; padding: 8px 4px; }
+.top button.link { align-self: center; }
+.version { color: var(--muted); font-size: .9rem; }
+.empty { background: var(--card); border: 2px dashed var(--line); border-radius: 8px; padding: 12px; margin: 12px 0; }
+.empty h2 { margin: 0 0 6px; }
+.examples-label { margin: 10px 0 0; color: var(--muted); font-weight: 700; }
+.examples { margin: 4px 0 0; padding-left: 1.2rem; color: var(--muted); font-style: italic; }

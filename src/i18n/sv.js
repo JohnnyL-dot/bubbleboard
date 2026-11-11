@@ -6,12 +6,23 @@ export const sv = {
   'app.version': 'Version {version}',
   'app.tagline': 'Jämför lappar två och två och få en rangordning.',
 
+  // Välkomststeg och information (KR-33, KR-35). Texterna är UX-designerns förslag och kan bytas utan att kraven ändras.
+  'welcome.title': 'Vad är viktigast att göra först?',
+  'welcome.text': 'Ett verktyg för att prioritera aktiviteter, inte för teknisk prioritering. Du jämför två lappar i taget och får en rangordning.',
+  'welcome.audience': 'Byggt för uppdragsledare, teamledare, scrummasters och projektledare.',
+  'welcome.example': 'Ett vanligt användningsområde är att prioritera risker.',
+  'welcome.steps': 'Lägg in lappar (2 till 25), jämför dem två och två och få en rangordning som du kan spara eller kopiera.',
+  'welcome.cta': 'Kom igång',
+  'nav.about': 'Om verktyget',
+  'nav.back': 'Tillbaka',
+
+  // Steg 2: skapa board (KR-34)
   'start.boardName': 'Namn på boarden',
   'start.alias': 'Ditt namn eller alias',
-  'start.individual': 'Prioritera själv',
-  'start.group': 'Gruppsession',
-  'start.groupSoon': 'Gruppsession är inte tillgänglig ännu.',
+  'board.create.cta': 'Skapa board',
+  'board.create.alias.help': 'Ett alias räcker. Inga konton.',
 
+  // Sessionslägen visas bara i gruppsession (KR-20, KR-40). I individuellt läge används de inte.
   'mode.prepared': 'Förberedd',
   'mode.running': 'Pågår',
   'mode.finished': 'Avslutad',
@@ -31,7 +42,13 @@ export const sv = {
   'note.duplicate': 'Duplicera',
   'note.remove': 'Ta bort',
   'note.count': '{count} av {max} lappar',
-  'note.empty': 'Inga lappar ännu. Lägg till minst två för att kunna starta.',
+  // Tomläge i Översikten (KR-39). Exemplen är inte lappar och läggs inte in i boarden.
+  'board.empty.title': 'Börja med att lägga in dina lappar',
+  'board.empty.text': 'Skriv en titel för varje aktivitet du vill prioritera. Du behöver minst två lappar.',
+  'board.empty.examples.label': 'Exempel',
+  'board.empty.example1': 'Uppdatera avtalet med leverantören',
+  'board.empty.example2': 'Ta fram plan för reservrutiner',
+  'board.empty.example3': 'Utbilda teamet i den nya processen',
   'note.addLocked': 'Lappar kan inte läggas till när sorteringen har startat.',
 
   'overview.hint': 'Dra i handtaget eller använd pilarna för att flytta en lapp. Ordningen ändrar inte poängen.',
@@ -109,7 +126,7 @@ export const sv = {
   'file.load': 'Läs in fil',
   'file.loadHint': 'Läs in en fil som den här appen har sparat. Filen innehåller lappar, och efter avslut resultatet.',
   'file.saved': 'Filen är sparad i din nedladdningsmapp.',
-  'file.loaded': 'Filen "{board}" är inläst med {count} lappar. Skriv ditt namn och tryck på Prioritera själv för att använda dem.',
+  'file.loaded': 'Filen "{board}" är inläst med {count} lappar. Skriv ditt namn och tryck på Skapa board för att använda dem.',
   'file.readonlyTitle': 'Resultat från fil (skrivskyddat)',
   'file.restart': 'Starta om värderingen med samma lappar',
   'file.close': 'Stäng',
