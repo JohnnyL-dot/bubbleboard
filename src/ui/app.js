@@ -70,6 +70,13 @@ export function mount(root, {
   live.setAttribute('role', 'status');
   if (root.parentNode) root.insertAdjacentElement('afterend', live);
 
+  // Versionsnumret syns på alla sidor, längst ner till höger, utanför det som ritas om (ändrat krav 2026-11-11).
+  // Det står också på "Om verktyget" (KR-35).
+  const versionEl = doc.createElement('footer');
+  versionEl.className = 'app-version';
+  versionEl.textContent = t('app.version', { version: VERSION });
+  if (root.parentNode) root.insertAdjacentElement('afterend', versionEl);
+
   const owner = () => state.session.ownerId;
   const emptyDraft = () => ({ title: '', description: '', category: '', color: '' });
 

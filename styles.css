@@ -110,3 +110,7 @@ button.link { min-height: 44px; border: 0; background: none; color: var(--primar
 .empty h2 { margin: 0 0 6px; }
 .examples-label { margin: 10px 0 0; color: var(--muted); font-weight: 700; }
 .examples { margin: 4px 0 0; padding-left: 1.2rem; color: var(--muted); font-style: italic; }
+
+/* Versionsnummer längst ner till höger, på alla sidor */
+body { padding-bottom: 32px; }
+.app-version { position: fixed; right: 8px; bottom: 6px; font-size: .75rem; color: var(--muted); background: var(--card); padding: 2px 6px; border-radius: 6px; pointer-events: none; }
