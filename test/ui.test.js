@@ -40,6 +40,7 @@ function setup(options = {}) {
   };
   const key = (k) => dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: k, bubbles: true }));
   const begin = (board = 'Workshop', alias = 'Johnny') => {
+    if (!$('[data-form="start"]')) action('get-started'); // steg 1 → steg 2 (KR-34)
     fill($('[data-form="start"]'), { boardName: board, alias });
     submit($('[data-form="start"]'));
   };
@@ -56,6 +57,7 @@ function setup(options = {}) {
 const reload = (prev, extra = {}) => setup({ dom: new JSDOM('<!doctype html><body><div id="app"></div></body>'), backend: prev.backend, ...extra });
 
 async function pickFile(ctx, { text, size, name = 'fil.json' }) {
+  if (!ctx.$('[data-file]')) ctx.action('get-started'); // steg 2 (KR-34)
   const input = ctx.$('[data-file]');
   const file = { name, size: size ?? text.length, text: async () => text };
   Object.defineProperty(input, 'files', { value: [file], configurable: true });
@@ -71,13 +73,103 @@ const boardFile = (n = 3) => {
 
 // ---- Start, lappar, gränser ----
 
-test('startsidan är på svenska, gruppsession är avstängd med förklaring', () => {
-  const { root, $ } = setup();
+test('välkomststeget visas först: rubrik, förklaring, målgrupp, risker, en primär knapp, inga fält (AT-23, KR-33)', () => {
+  const { root, $, $$ } = setup();
   assert.match(root.textContent, /Prioriteringsboard/);
-  assert.equal($('button[disabled]').textContent, 'Gruppsession');
-  assert.match(root.textContent, /Gruppsession är inte tillgänglig/);
-  assert.doesNotMatch(root.textContent, /OQ-/);
+  assert.match($('h1').textContent, /Vad är viktigast att göra först/);
+  assert.match(root.textContent, /aktiviteter, inte för teknisk prioritering/);
+  assert.match(root.textContent, /uppdragsledare, teamledare, scrummasters och projektledare/);
+  assert.match(root.textContent, /prioritera risker/);
+  assert.equal($$('input, select, textarea, form').length, 0, 'inga formulärfält i steg 1');
+  assert.equal($$('button.primary').length, 1);
+  assert.equal($('button.primary').textContent, 'Kom igång');
+  assert.doesNotMatch(root.textContent, /Gruppsession|OQ-/);
+  assert.equal($('.mode'), null);
 });
+
+test('Kom igång visar steg 2 med formuläret och en väg tillbaka, utan gruppsession (AT-24, KR-34)', () => {
+  const { root, $, $$, action, begin } = setup();
+  action('get-started');
+  assert.ok($('[data-form="start"]'));
+  assert.ok($('[data-file]'), 'filinläsning finns i steg 2');
+  assert.equal($('[data-form="start"] button.primary').textContent, 'Skapa board');
+  assert.doesNotMatch(root.textContent, /Gruppsession/);
+  assert.equal($$('button[disabled]').length, 0, 'ingen avaktiverad knapp');
+  assert.doesNotMatch(root.textContent, /Vad är viktigast att göra först/, 'steg 1 och formuläret visas inte samtidigt');
+  action('to-welcome');
+  assert.equal($('[data-form="start"]'), null);
+  assert.match($('h1').textContent, /Vad är viktigast/);
+  begin('  ', 'Johnny');
+  assert.match($('.error').textContent, /behöver ett namn/);
+});
+
+test('Om verktyget: från steg 2, Översikt och resultat, tillbaka utan förlust, inte i jämförelseflödet, version där (AT-25, KR-35)', async () => {
+  const { VERSION } = await import('../src/version.js');
+  const a = setup();
+  a.action('get-started');
+  a.action('about');
+  assert.match(a.$('h1').textContent, /Om verktyget/);
+  assert.match(a.root.textContent, new RegExp(`Version ${VERSION.replace(/\./g, '\\.')}`));
+  assert.match(a.root.textContent, /prioritera risker/);
+  a.action('about-back');
+  assert.ok(a.$('[data-form="start"]'));
+  a.begin();
+  ['A', 'B', 'C'].forEach((x) => a.addNote(x));
+  assert.ok(a.$('[data-action="about"]'), 'länk i Översikten');
+  assert.doesNotMatch(a.root.textContent, /Version \d/, 'versionsnumret syns inte på boardens skärmar (KR-40)');
+  a.action('about');
+  a.action('about-back');
+  assert.equal(a.$$('.note').length, 3, 'lapparna finns kvar');
+  a.action('start');
+  assert.equal(a.$('[data-action="about"]'), null, 'ingen länk i jämförelseflödet');
+  while (a.$('.choice')) a.action('answer');
+  a.action('show-result'); a.action('confirm-yes');
+  assert.ok(a.$('[data-action="about"]'), 'länk i resultatvyn');
+  a.action('about');
+  a.action('about-back');
+  assert.match(a.$('h2').textContent, /Resultat/);
+  // Fungerar utan lagring: rensad lagring visar steg 1 och informationen via Kom igång och Om verktyget
+  const b = setup({ backend: { getItem: () => null, setItem: () => { throw new Error('nej'); }, removeItem: () => {} } });
+  b.action('get-started'); b.action('about');
+  assert.match(b.$('h1').textContent, /Om verktyget/);
+});
+
+test('tomläge: förklaring och exempel märkta Exempel, inga lappar, kan inte starta (AT-30, KR-39)', () => {
+  const { $, $$, root, begin, addNote } = setup();
+  begin();
+  assert.equal($$('.note').length, 0);
+  assert.match($('.count').textContent, /0 av 25 lappar/);
+  assert.match($('.empty').textContent, /minst två lappar/);
+  assert.match($('.examples-label').textContent, /Exempel/);
+  assert.equal($$('.examples li').length, 3);
+  assert.ok($('[data-action="start"]').disabled);
+  assert.doesNotMatch(root.textContent, /Inga lappar ännu/);
+  addNote('Egen lapp');
+  assert.equal($('.empty'), null, 'tomläget försvinner när det finns en lapp');
+  assert.equal($$('.note').length, 1);
+});
+
+test('ny session leder till steg 2 och ett nytt besök börjar med steg 1 (KR-33)', () => {
+  const a = setup();
+  a.begin();
+  ['A', 'B'].forEach((x) => a.addNote(x));
+  a.action('start'); while (a.$('.choice')) a.action('answer');
+  a.action('show-result'); a.action('confirm-yes'); a.action('new-session'); a.action('confirm-yes');
+  assert.ok(a.$('[data-form="start"]'));
+  const r = reload(a);
+  assert.match(r.$('h1').textContent, /Vad är viktigast/);
+  assert.equal(r.$('[data-form="start"]'), null, 'inget om att steg 1 har setts sparas');
+});
+
+test('med en pågående board öppnas boarden direkt, utan välkomststeg (AT-23)', () => {
+  const a = setup();
+  a.begin();
+  a.addNote('A');
+  const r = reload(a);
+  assert.equal($$(r, '.note').length, 1);
+  assert.doesNotMatch(r.root.textContent, /Vad är viktigast att göra först/);
+});
+const $$ = (ctx, sel) => ctx.$$(sel);
 
 test('board utan namn ger begripligt felmeddelande (KR-29)', () => {
   const { $, begin } = setup();
@@ -131,14 +223,15 @@ test('läget heter Översikt överallt och "fritt läge" finns inte kvar i texte
 });
 
 test('start kräver två lappar, därefter pågår sortering och framsteg visas (AT-3, KR-12)', () => {
-  const { $, action, begin, addNote } = setup();
+  const { $, root, action, begin, addNote } = setup();
   begin();
   addNote('A');
   assert.ok($('[data-action="start"]').disabled);
   addNote('B');
   addNote('C');
   action('start');
-  assert.match($('.top').textContent, /Pågår/);
+  assert.doesNotMatch(root.textContent, /Läge|Förberedd/, 'inga systemlägen i individuellt läge (KR-40)');
+  assert.ok($('.progress'));
   assert.match($('.progress').textContent, /0 av 3 jämförelser klara/);
   assert.equal($('.pair').querySelectorAll('.choice').length, 2);
   action('answer');
@@ -276,7 +369,8 @@ test('hela flödet: sortera klart, visa resultat och kopiera tabbavgränsad text
   action('show-result');
   assert.match($('.dialog').textContent, /slutgiltigt/);
   action('confirm-yes');
-  assert.match($('.top').textContent, /Avslutad/);
+  assert.match($('h2').textContent, /Resultat/);
+  assert.doesNotMatch($('.top').textContent, /Avslutad|Läge/);
   assert.equal($('.prelim'), null);
   assert.equal($$('.ranking:not(.sortable) .rank-row').length, 3);
   click($('[data-action="copy"]'));
@@ -469,7 +563,7 @@ test('omladdning i Översikten och i resultatet behåller lappar och manuell ord
   b.action('show-result');
   b.action('confirm-yes');
   const c = reload(b);
-  assert.match(c.$('.top').textContent, /Avslutad/);
+  assert.match(c.$('h2').textContent, /Resultat/);
   assert.equal(c.$$('.ranking:not(.sortable) .rank-row').length, 3);
 });
 
@@ -487,7 +581,7 @@ test('ny session rensar lagrad data efter bekräftelse', () => {
   a.action('confirm-yes');
   assert.ok(a.$('[data-form="start"]'));
   assert.equal(a.backend.data.has(STORAGE_KEY), false);
-  assert.ok(reload(a).$('[data-form="start"]'));
+  assert.ok(reload(a).$('.welcome'));
 });
 
 test('lagring som inte går att använda ger en synlig varning (KR-21)', () => {
@@ -513,7 +607,7 @@ test('trasig lagrad data tas bort med ett begripligt meddelande (NFR-9)', () => 
   const backend = memoryBackend();
   backend.data.set(STORAGE_KEY, '{"v":1,"mode":"running"');
   const a = setup({ backend });
-  assert.ok(a.$('[data-form="start"]'));
+  assert.match(a.$('h1').textContent, /Vad är viktigast/);
   assert.match(a.$('.warning').textContent, /gick inte att läsa/);
   assert.equal(backend.data.has(STORAGE_KEY), false);
   const b = setup({ backend: (() => { const x = memoryBackend(); x.data.set(STORAGE_KEY, JSON.stringify({ v: 1, boardName: 'x' })); return x; })() });
@@ -619,15 +713,16 @@ test('alla gränssnittstexter finns i språkfilen (NFR-11)', async () => {
   }
 });
 
-test('versionsnumret visas längst ner och följer package.json och taggen', async () => {
+test('versionsnumret visas på Om verktyget och följer package.json och taggen', async () => {
   const fs = await import('node:fs');
   const { VERSION } = await import('../src/version.js');
   const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(VERSION, pkg.version);
   assert.match(VERSION, /^\d+\.\d+\.\d+$/);
-  const { dom } = setup();
-  const el = dom.window.document.querySelector('.app-version');
-  assert.equal(el.textContent, `Version ${VERSION}`);
+  const a = setup();
+  assert.equal(a.dom.window.document.querySelector('.app-version'), null, 'ingen fast sidfot längre (KR-35)');
+  a.action('get-started'); a.action('about');
+  assert.equal(a.$('.version').textContent, `Version ${VERSION}`);
 });
 
 test('fil med 26 lappar avvisas med tydligt meddelande och inget ändras (KR-31, OQ-72)', async () => {

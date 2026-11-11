@@ -59,6 +59,9 @@ export function mount(root, {
     pendingFile: null,   // inläst board-fil som väntar på namn och start
     fileView: null,      // inläst resultatfil, visas skrivskyddat
     focus: null,         // { id, dir } återställer fokus efter flytt (tangentbord)
+    screen: 'welcome',   // utan board: 'welcome' (steg 1, KR-33) | 'start' (steg 2, KR-34)
+    about: false,        // "Om verktyget" visas (KR-35)
+    focusHeading: false, // flytta fokus till rubriken efter byte av skärm
   };
 
   const live = doc.createElement('div');
@@ -66,12 +69,6 @@ export function mount(root, {
   live.setAttribute('aria-live', 'polite');
   live.setAttribute('role', 'status');
   if (root.parentNode) root.insertAdjacentElement('afterend', live);
-
-  // Versionsnummer längst ner till höger, utanför det som ritas om.
-  const versionEl = doc.createElement('footer');
-  versionEl.className = 'app-version';
-  versionEl.textContent = t('app.version', { version: VERSION });
-  if (root.parentNode) root.insertAdjacentElement('afterend', versionEl);
 
   const owner = () => state.session.ownerId;
   const emptyDraft = () => ({ title: '', description: '', category: '', color: '' });
@@ -137,11 +134,51 @@ export function mount(root, {
 
   // ---------- Vyer ----------
 
+  const aboutLink = () => `<button type="button" class="link" data-action="about">${esc(t('nav.about'))}</button>`;
+
+  /** Informationen som delas av välkomststeget och "Om verktyget" (KR-33, KR-35). */
+  function infoBody() {
+    return `
+      <p class="lead">${esc(t('welcome.text'))}</p>
+      <p>${esc(t('welcome.audience'))}</p>
+      <p>${esc(t('welcome.example'))}</p>
+      <p>${esc(t('welcome.steps'))}</p>`;
+  }
+
+  /** Steg 1: välkomststeg före formuläret (KR-33). Inga fält, en primär knapp. Inget sparas om att det har setts. */
+  function renderWelcome() {
+    return `
+      <main class="welcome">
+        <p class="product">${esc(t('app.title'))}</p>
+        <h1 tabindex="-1">${esc(t('welcome.title'))}</h1>
+        ${banners()}
+        <p class="lead">${esc(t('welcome.text'))}</p>
+        <div class="row"><button type="button" class="primary" data-action="get-started">${esc(t('welcome.cta'))}</button></div>
+        <p>${esc(t('welcome.audience'))}</p>
+        <p>${esc(t('welcome.example'))}</p>
+        <p>${esc(t('welcome.steps'))}</p>
+      </main>`;
+  }
+
+  /** "Om verktyget" (KR-35): samma information som steg 1, och versionsnumret. */
+  function renderAbout() {
+    return `
+      <main class="about">
+        <p class="product">${esc(t('app.title'))}</p>
+        <h1 tabindex="-1">${esc(t('nav.about'))}</h1>
+        <h2>${esc(t('welcome.title'))}</h2>
+        ${infoBody()}
+        <p class="version">${esc(t('app.version', { version: VERSION }))}</p>
+        <div class="row"><button type="button" class="primary" data-action="about-back">${esc(t('nav.back'))}</button></div>
+      </main>`;
+  }
+
+  /** Steg 2: skapa board och läs in fil (KR-34, KR-29, KR-31). */
   function renderStart() {
     const pending = state.pendingFile;
     return `
       <main class="start">
-        <h1>${esc(t('app.title'))}</h1>
+        <div class="top"><h1 tabindex="-1">${esc(t('app.title'))}</h1>${aboutLink()}</div>
         <p>${esc(t('app.tagline'))}</p>
         ${banners()}
         ${state.error ? `<p class="error" role="alert">${esc(state.error)}</p>` : ''}
@@ -150,29 +187,31 @@ export function mount(root, {
           <label>${esc(t('start.boardName'))}
             <input name="boardName" value="${esc(state.startDraft.boardName)}" autocomplete="off"></label>
           <label>${esc(t('start.alias'))}
-            <input name="alias" value="${esc(state.startDraft.alias)}" autocomplete="nickname"></label>
+            <input name="alias" value="${esc(state.startDraft.alias)}" autocomplete="nickname" aria-describedby="alias-help"></label>
+          <p id="alias-help" class="hint">${esc(t('board.create.alias.help'))}</p>
           <div class="row">
-            <button type="submit" class="primary">${esc(t('start.individual'))}</button>
-            <button type="button" disabled aria-describedby="group-info">${esc(t('start.group'))}</button>
+            <button type="submit" class="primary">${esc(t('board.create.cta'))}</button>
           </div>
-          <p id="group-info" class="hint">${esc(t('start.groupSoon'))}</p>
         </form>
         <p class="file-load">
           <label>${esc(t('file.load'))}
             <input type="file" accept=".json,application/json" data-file></label>
         </p>
         <p class="hint">${esc(t('file.loadHint'))}</p>
+        <div class="row"><button type="button" data-action="to-welcome">${esc(t('nav.back'))}</button></div>
       </main>`;
   }
 
   function header(s) {
     const showToggle = s.mode === MODE.RUNNING;
+    // KR-40: inga systemlägen i individuellt läge. KR-35: "Om verktyget" syns överallt utom i jämförelseflödet.
+    const inSort = s.mode === MODE.RUNNING && state.view === 'sort';
     return `
       <header class="top">
         <div>
-          <h1>${esc(s.boardName)}</h1>
-          <p class="mode">${esc(t('mode.label'))}: <strong>${esc(t(`mode.${s.mode}`))}</strong></p>
+          <h1 tabindex="-1">${esc(s.boardName)}</h1>
         </div>
+        ${inSort ? '' : aboutLink()}
         ${showToggle ? `
         <nav class="toggle" aria-label="${esc(t('mode.label'))}">
           <button data-action="view" data-view="overview" aria-pressed="${state.view === 'overview'}">${esc(t('view.overview'))}</button>
@@ -215,6 +254,19 @@ export function mount(root, {
       </span>`;
   }
 
+  /** Tomläge (KR-39): förklaring och exempel som ren text. Exemplen är inga lappar och räknas inte. */
+  function renderEmpty() {
+    return `
+      <section class="empty" aria-labelledby="empty-title">
+        <h2 id="empty-title">${esc(t('board.empty.title'))}</h2>
+        <p>${esc(t('board.empty.text'))}</p>
+        <p class="examples-label">${esc(t('board.empty.examples.label'))}</p>
+        <ul class="examples">
+          ${[1, 2, 3].map((i) => `<li>${esc(t(`board.empty.example${i}`))}</li>`).join('')}
+        </ul>
+      </section>`;
+  }
+
   function renderOverview() {
     const s = state.session;
     const canEditList = s.mode !== MODE.FINISHED;
@@ -241,7 +293,7 @@ export function mount(root, {
       <p class="count">${esc(t('note.count', { count: s.notes.length, max: LIMITS.MAX_NOTES }))}</p>
       ${s.notes.length > 1 ? `<p class="hint">${esc(t('overview.hint'))}</p>` : ''}
       ${s.manualOrder ? `<p class="hint">${esc(t('overview.manualInfo'))} <button data-action="reset-order">${esc(t('overview.reset'))}</button></p>` : ''}
-      ${s.notes.length ? `<ol class="notes sortable" data-sortable>${items}</ol>` : `<p class="hint">${esc(t('note.empty'))}</p>`}
+      ${s.notes.length ? `<ol class="notes sortable" data-sortable>${items}</ol>` : renderEmpty()}
       <div class="row">
         ${s.mode === MODE.PREPARED ? `<button data-action="start" class="primary"${s.notes.length < LIMITS.MIN_NOTES ? ' disabled' : ''}>${esc(t('sort.start'))}</button>` : ''}
         <button data-action="save-file"${s.notes.length < LIMITS.MIN_NOTES ? ' disabled' : ''}>${esc(t('file.saveBoard'))}</button>
@@ -383,7 +435,7 @@ export function mount(root, {
   function renderFileView() {
     const f = state.fileView;
     return `
-      <header class="top"><div><h1>${esc(f.boardName)}</h1><p class="mode">${esc(t('file.readonlyTitle'))}</p></div></header>
+      <header class="top"><div><h1 tabindex="-1">${esc(f.boardName)}</h1><p class="mode">${esc(t('file.readonlyTitle'))}</p></div>${aboutLink()}</header>
       <main>
         ${state.error ? `<p class="error" role="alert">${esc(state.error)}</p>` : ''}
         <h2>${esc(t('result.title'))}</h2>
@@ -410,9 +462,18 @@ export function mount(root, {
   }
 
   function render() {
+    paint();
+    if (state.focusHeading) {
+      state.focusHeading = false;
+      root.querySelector('h1')?.focus?.();
+    }
+  }
+
+  function paint() {
     const s = state.session;
+    if (state.about) { root.innerHTML = renderAbout(); return; }
     if (!s) {
-      root.innerHTML = state.fileView ? renderFileView() : renderStart();
+      root.innerHTML = state.fileView ? renderFileView() : (state.screen === 'start' ? renderStart() : renderWelcome());
       return;
     }
     let content;
@@ -505,8 +566,13 @@ export function mount(root, {
       state.pendingFile = { boardName: f.boardName, notes: f.notes };
       state.startDraft.boardName = f.boardName;
       state.fileView = null;
+      state.screen = 'start';
     },
-    'close-file': () => { state.fileView = null; },
+    'close-file': () => { state.fileView = null; state.screen = 'start'; state.focusHeading = true; },
+    'get-started': () => { state.screen = 'start'; state.focusHeading = true; },
+    'to-welcome': () => { state.screen = 'welcome'; state.focusHeading = true; },
+    about: () => { state.about = true; state.focusHeading = true; },
+    'about-back': () => { state.about = false; state.focusHeading = true; },
     'new-session': () => {
       state.confirm = {
         message: t('confirm.newSession'),
@@ -514,6 +580,7 @@ export function mount(root, {
           state.session = null; state.view = 'overview'; state.editingId = null;
           state.draft = emptyDraft(); state.copyFallback = ''; state.pendingFile = null;
           state.startDraft = { boardName: '', alias: '' };
+          state.screen = 'start';
         },
       };
     },
@@ -622,7 +689,7 @@ export function mount(root, {
   // Tangentbordsnavigering i jämförelseflödet (NFR-1).
   doc.addEventListener('keydown', (event) => {
     const s = state.session;
-    if (!s || s.mode !== MODE.RUNNING || state.view !== 'sort' || state.confirm) return;
+    if (!s || s.mode !== MODE.RUNNING || state.view !== 'sort' || state.confirm || state.about) return;
     if (!s.currentPair()) return;
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName)) return;
     const map = { ArrowLeft: 'left', ArrowRight: 'right', '=': 'equal' };
